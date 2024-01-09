@@ -6,12 +6,9 @@ function R(x,x₀) # rankine source/image pair
     return 1/len(x-x₀⁻)-1/len(x-x₀)
 end
 
-function D(x,x₀) # Near-field standing wave 
-    #4/π ∫ dθ ⨘ dk exp(kz) cos(kx cosθ) cos(ky sinθ) / (k cos²θ-1) 
-    return 0
-end
-
-function W(x,x₀) # Far-field traveling wave 
-    #4 ∫ dθ exp(z sec²θ) sin(x secθ) cos(y sec²θ sinθ) sec²θ
-    return 0
-end
+using QuadGK,Plots
+D(x,y,z) = 2/π*quadgk(T->Di(x,y,z,T),-Inf,Inf,rtol=1e-8)
+Di(x,y,z,T) = 0
+W(x,y,z) = quadgk(T->Wi(x,y,z,T),x/abs(y),Inf,rtol=1e-8)
+Wi(x,y,z,T) = exp((1+T^2)*z)*sin((x-abs(y)*T)*√(1+T^2))
+W(-0.1,0.2,-0.01)
