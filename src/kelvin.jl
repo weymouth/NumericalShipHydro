@@ -15,4 +15,8 @@ Di(x,y,z,T) = real(expintx(χ(x,y,z,T)))
 W(x,y,z) = 4quadgk(T->Wi(x,y,z,T),x/abs(y),√(-5log(10)/z-1),rtol=1e-5)[1]
 Wi(x,y,z,T) = exp((1+T^2)*z)*sin((x-abs(y)*T)*hypot(1,T))
 
-G(SA[0.1,0.2,0],SA[0,0,-1])
+using FiniteDifferences
+# Potential and velocity
+ϕ(x) = G(x,SA[0,0,-1]) # replace with summation over points
+u(x) = grad(central_fdm(2, 1),ϕ,x)[1]
+u(SA[0.1,0.2,0])
