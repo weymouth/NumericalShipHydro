@@ -22,5 +22,9 @@ u(x;kwargs...) = grad(central_fdm(2, 1),x->ϕ(x;kwargs...),x)[1]
 
 # Check that errors are quite small 
 for x in (SA[0.1,0.1,-0.9],SA[1.,1.,0.],SA[10.,10.,0.])
-    println(sum(abs2,u(x).-u(x,atol=1e-16,Tmax=Inf)))
+    println(√sum(abs2,u(x).-u(x,atol=1e-16,Tmax=Inf))/3)
 end
+
+using Plots
+ζ(x,y;kwargs...) = grad(central_fdm(2, 1),x->ϕ(SA[x,y,0];kwargs...),x)[1]
+contour(-15:0.1:3,-6:0.1:6,ζ,aspect_ratio=:equal,levels=[-2,-1.5,-1,-.5,.5,1,1.5])
