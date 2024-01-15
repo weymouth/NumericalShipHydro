@@ -29,20 +29,13 @@ uses the Gauss-Legendre weights and evaluation points `w,T`.
     end; h*s
 end
 
-# using QuadGK,BenchmarkTools
-# D2(x,y,z;Tmax=Inf) = quadgk_count(T->Di(x,y,z,T),-Tmax,Tmax)
-# @btime D2(0.1,0.1,-0.01)
-# @btime D2(1.,1.,-1.)
-# @btime D2(-10.,3.,-1.)
-# @btime D(0.1,0.1,-0.01)
-# @btime D(1.,1.,-1.,$w,$T)
-# @btime D(-10.,3.,-1.,$w,$T)
-# plot(T,x->Di(0.1,0.1,-0.01,x/(1-x^2))*(1+x^2)/(1-x^2)^2)
-
-# W2(x,y,z) = quadgk_count(T->Wi(x,y,z,T),x/abs(y),Inf)
-# @btime W2(0.1,0.1,-0.1)
-# @btime W2(1.,1.,-1.)
-# @btime W2(-10.,3.,-1.)
-# @btime W(0.1,0.1,-0.1,$w,$T)
-# @btime W(1.,1.,-1.,$w,$T)
-# @btime W(-10.,3.,-1.,$w,$T)
+using SpecialFunctions
+using ForwardDiff: derivative, value, partials, Dual
+# Fix automatic differentiation of expintx(Complex(Dual))
+# https://discourse.julialang.org/t/add-forwarddiff-rule-to-allow-complex-arguments/108821
+function SpecialFunctions.expintx(ϕ::Complex{<:Dual{Tag}}) where {Tag}
+    x, y = reim(ϕ); px, py = partials(x), partials(y)
+    z = complex(value(x), value(y)); Ω = expintx(z)
+    u, v = reim(Ω); ∂u, ∂v = reim(Ω - inv(z))
+    complex(Dual{Tag}(u, ∂u*px - ∂v*py), Dual{Tag}(v, ∂v*px + ∂u*py))
+end

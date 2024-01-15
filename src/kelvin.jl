@@ -1,5 +1,4 @@
-include("quad.jl")
-include("autodiff.jl")
+include("util.jl")
 function G(x,y,z,a,b,c;k=1,kwargs...)
     # Wavenumber-scaled vector from source and image source
     r = k .* (x-a,y-b,z-c); r′ = k .* (x-a,y-b,z+c)
