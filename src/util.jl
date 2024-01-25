@@ -23,7 +23,7 @@ Approximate ∫f(x)dx from x=[a,b] using `quadgl` with the change of variable x=
 end
 
 using SpecialFunctions
-using ForwardDiff: derivative, value, partials, Dual
+using ForwardDiff: derivative, gradient, value, partials, Dual
 # Fix automatic differentiation of expintx(Complex(Dual))
 # https://discourse.julialang.org/t/add-forwarddiff-rule-to-allow-complex-arguments/108821
 function SpecialFunctions.expintx(ϕ::Complex{<:Dual{Tag}}) where {Tag}
@@ -31,4 +31,17 @@ function SpecialFunctions.expintx(ϕ::Complex{<:Dual{Tag}}) where {Tag}
     z = complex(value(x), value(y)); Ω = expintx(z)
     u, v = reim(Ω); ∂u, ∂v = reim(Ω - inv(z))
     complex(Dual{Tag}(u, ∂u*px - ∂v*py), Dual{Tag}(v, ∂v*px + ∂u*py))
+end
+
+using LinearAlgebra: ×,⋅
+"""
+    param_props(x,u,v,dudv)-> (x,n̂,dA)|_(u,v)
+
+Given a parametric surface function `x(u,v)`, return the location, unit 
+normal `n̂=n/|n|`, and surface area `dA≈|n|dudv`, where `n=∂x/∂v×∂x/∂u`.
+"""
+function param_props(x,u,v,dudv)
+    n = derivative(v->x(u,v),v)×derivative(u->x(u,v),u)
+    mag = hypot(n...)
+    Dict("x"=>x(u,v), "n"=>n/mag, "dA"=>mag*dudv)
 end
