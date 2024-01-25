@@ -8,13 +8,13 @@ end
 
 # Near-field non-oscillatory wave
 Di(x,y,z,T) = real(expintx(complex((1+T^2)*z,eps(T)+(x+y*T)*hypot(1,T))))
-D(x,y,z) = 2/π*quadgl_inf(T->Di(x,y,z,T)) 
+D(x,y,z;kwargs...) = 2/π*quadgl_inf(T->Di(x,y,z,T);kwargs...)
 
 # Far-field oscillatory wave
 Wi(x,y,z,T) = exp((1+T^2)*z)*sin((x-abs(y)*T)*hypot(1,T))
-function W(x,y,z)
+function W(x,y,z;kwargs...)
     a,b = x/abs(y),√(-5log(10)/z-1) # integral domain
-    (a≥b || x==y==0) ? 0. : 4quadgl_ab(T->Wi(x,y,z,T),max(a,-b),b)
+    (a≥b || x==y==0) ? 0. : 4*quadgl_ab(T->Wi(x,y,z,T),max(a,-b),b;kwargs...)
 end
 
 # Potential and surface elevation

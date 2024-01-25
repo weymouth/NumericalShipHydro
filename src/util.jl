@@ -1,32 +1,25 @@
 using FastGaussQuadrature
-Tgl, wgl = gausslegendre(101);
+xgl, wgl = gausslegendre(101);
+"""
+    quadgl(f;w=wgl,x=xgl)
 
+Approximate ∫f(x)dx from x=[-1,1] using the Gauss-Legendre weights and points `w,x`.
 """
-    quadgl_inf(f;w=wgl,T=Tgl)
+@fastmath quadgl(f;w=wgl,x=xgl) = sum(wᵢ*f(xᵢ) for (wᵢ,xᵢ) in zip(w,x))
+"""
+    quadgl_inf(f;kwargs...)
 
-Approximate the integral ∫f(x)dx from x=[-∞,∞]. Maps the domain 
-to t=[-1,1] using the change of variable x=t/(1-t^2) and uses 
-the Gauss-Legendre weights and evaluation points `w,T`.
+Approximate ∫f(x)dx from x=[-∞,∞] using `quadgl` with the change of variable x=t/(1-t^2).
 """
-@fastmath function quadgl_inf(f;w=wgl,T=Tgl)
-    s = zero(eltype(w))
-    @simd for i in eachindex(w,T)
-        s += w[i] * f(T[i]/(1-T[i]^2))*(1+T[i]^2)/(1-T[i]^2)^2
-    end; s
-end
+@fastmath quadgl_inf(f;kwargs...) = quadgl(t->f(t/(1-t^2))*(1+t^2)/(1-t^2)^2;kwargs...)
 """
-    quadgl_ab(f,a,b;w=wgl,T=Tgl)
+    quadgl_ab(f,a,b;kwargs...)
 
-Approximate the integral ∫f(x)dx from x=[a,b]. Maps the domain 
-to t=[-1,1] using the change of variable x=(a+b+t*(b-a))/2 and 
-uses the Gauss-Legendre weights and evaluation points `w,T`.
+Approximate ∫f(x)dx from x=[a,b] using `quadgl` with the change of variable x=½(a+b+tb-ta).
 """
-@fastmath function quadgl_ab(f,a,b;w=wgl,T=Tgl)
-    s = zero(eltype(w))
+@fastmath function quadgl_ab(f,a,b;kwargs...)
     h,j = (b-a)/2,(a+b)/2
-    @simd for i in eachindex(w,T)
-        s += w[i] * f(j+h*T[i])
-    end; h*s
+    h*quadgl(t->f(j+h*t);kwargs...)
 end
 
 using SpecialFunctions
