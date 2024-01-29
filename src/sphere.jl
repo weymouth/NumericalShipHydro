@@ -8,21 +8,27 @@ function sphere(h;a=1)
         param_props.(x,ϕ,0.5dθ:dθ:2π,dϕ,dθ)
     end
 end
-h = 0.1; panels = sphere(h)
-x,y,z = eachrow(stack(get.(panels,"x",0)))
+h = 0.3; panels = sphere(h); N=length(panels)
+x,y,z = eachrow(stack(get.(panels,"x",0)));
 plot(x,y,z,camera=(-20,20),legend=false)
-dA = get.(panels,"dA",0)
+dA = get.(panels,"dA",0);
 sum(dA)/4π-1
 plot(z,dA/h^2,ylim=(0,2),xlabel="z",ylabel="dA/h²",legend=false)
+equator = filter(i->-h<z[i]<h,1:length(panels));
+nx,ny,_ = eachrow(stack(get.(panels,"n",0)));
+quiver(x[equator],y[equator],quiver = (nx[equator],ny[equator]), aspect_ratio=:equal)
 
 include("solve.jl")
-A = ∂ₙϕ.(panels,permutedims(panels))
-b = -Uₙ.(panels)
-q = A \ b
+A = ∂ₙϕ.(panels,permutedims(panels));
+b = -Uₙ.(panels);
+q = A \ b;
 A*q ≈ b
 ma = added_mass(q,panels)
-2π/3
 ma[1]/(2π/3)-1
 u,v,w = eachrow(body_velocity(q,panels))
-equator = filter(i->abs(z[i])<h,1:length(panels))
+extrema(u)
 quiver(x[equator],y[equator],quiver = (u[equator],v[equator]), aspect_ratio=:equal)
+plot(0:0.01:π,x->1.5sin(x),label="exact",xlabel="θ",ylabel="|u|")
+θ,mag_u = @. abs(atan(y[equator],x[equator])),hypot(u[equator],v[equator]);
+scatter!(θ,mag_u,label="numeric")
+title!("Sphere surface velocity magnitude with h/a=$h")

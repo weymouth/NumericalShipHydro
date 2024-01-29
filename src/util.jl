@@ -42,6 +42,6 @@ normal `n̂=n/|n|`, and surface area `dA≈|n|`, where `n=(dv*∂x/∂v)×(du*�
 """
 function param_props(x,u,v,du,dv)
     Tu,Tv = du*derivative(u->x(u,v),u),dv*derivative(v->x(u,v),v) 
-    n = Tv×Tu; mag = hypot(n...)
+    n = Tu×Tv; mag = hypot(n...)
     Dict("x"=>x(u,v), "n"=>n/mag, "dA"=>mag, "Tu"=>Tu, "Tv"=>Tv)
 end
