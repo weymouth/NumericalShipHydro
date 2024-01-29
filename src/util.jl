@@ -35,13 +35,13 @@ end
 
 using LinearAlgebra: ×,⋅
 """
-    param_props(x,u,v,dudv)-> (x,n̂,dA)|_(u,v)
+    param_props(x,u,v,du,dv)-> (x,n̂,dA)|_(u,v)
 
 Given a parametric surface function `x(u,v)`, return the location, unit 
-normal `n̂=n/|n|`, and surface area `dA≈|n|dudv`, where `n=∂x/∂v×∂x/∂u`.
+normal `n̂=n/|n|`, and surface area `dA≈|n|`, where `n=(dv*∂x/∂v)×(du*∂x/∂u)`.
 """
-function param_props(x,u,v,dudv)
-    n = derivative(v->x(u,v),v)×derivative(u->x(u,v),u)
-    mag = hypot(n...)
-    Dict("x"=>x(u,v), "n"=>n/mag, "dA"=>mag*dudv)
+function param_props(x,u,v,du,dv)
+    Tu,Tv = du*derivative(u->x(u,v),u),dv*derivative(v->x(u,v),v) 
+    n = Tv×Tu; mag = hypot(n...)
+    Dict("x"=>x(u,v), "n"=>n/mag, "dA"=>mag, "Tu"=>Tu, "Tv"=>Tv)
 end
