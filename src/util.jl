@@ -34,14 +34,16 @@ function SpecialFunctions.expintx(ϕ::Complex{<:Dual{Tag}}) where {Tag}
 end
 
 using LinearAlgebra: ×,⋅
+using TypedTables
 """
-    param_props(x,u,v,du,dv)-> (x,n̂,dA)|_(u,v)
+    param_props(S,u,v,du,dv) -> (x,n̂,dA,Tᵤ,Tᵥ)
 
-Given a parametric surface function `x(u,v)`, return the location, unit 
-normal `n̂=n/|n|`, and surface area `dA≈|n|`, where `n=(dv*∂x/∂v)×(du*∂x/∂u)`.
+Given a parametric surface function `x=S(u,v)`, return `x`, the unit 
+normal `n̂=n/|n|`, the surface area `dA≈|n|`, and the tangent vectors 
+`Tᵤ=du*∂x/∂u`,`Tᵥ=dv*∂x/∂v`, where `n≡Tᵤ×Tᵥ`.
 """
-function param_props(x,u,v,du,dv)
-    Tu,Tv = du*derivative(u->x(u,v),u),dv*derivative(v->x(u,v),v) 
+function param_props(S,u,v,du,dv)
+    Tu,Tv = du*derivative(u->S(u,v),u),dv*derivative(v->S(u,v),v) 
     n = Tu×Tv; mag = hypot(n...)
-    Dict("x"=>x(u,v), "n"=>n/mag, "dA"=>mag, "Tu"=>Tu, "Tv"=>Tv)
+    (x=S(u,v), n=n/mag, dA=mag, Tu=Tu, Tv=Tv)
 end

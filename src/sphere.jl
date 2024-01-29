@@ -6,16 +6,15 @@ function sphere(h;a=1)
     mapreduce(vcat,0.5dϕ:dϕ:π) do ϕ
         dθ = 2π/round(2π*a*sin(ϕ)/h)
         param_props.(x,ϕ,0.5dθ:dθ:2π,dϕ,dθ)
-    end
+    end |> Table
 end
 h = 0.3; panels = sphere(h); N=length(panels)
-x,y,z = eachrow(stack(get.(panels,"x",0)));
+x,y,z = eachrow(stack(panels.x));
 plot(x,y,z,camera=(-20,20),legend=false)
-dA = get.(panels,"dA",0);
-sum(dA)/4π-1
-plot(z,dA/h^2,ylim=(0,2),xlabel="z",ylabel="dA/h²",legend=false)
+sum(panels.dA)/4π-1
+plot(z,panels.dA/h^2,ylim=(0,2),xlabel="z",ylabel="dA/h²",legend=false)
 equator = filter(i->-h<z[i]<h,1:length(panels));
-nx,ny,_ = eachrow(stack(get.(panels,"n",0)));
+nx,ny,_ = eachrow(stack(panels.n));
 quiver(x[equator],y[equator],quiver = (nx[equator],ny[equator]), aspect_ratio=:equal)
 
 include("solve.jl")
