@@ -40,7 +40,7 @@ Uₙ(pᵢ;U=[1,0,0]) = U ⋅ pᵢ.n
     φ(x,q,panels;G=source)
     ∇φ(x,q,panels;G=source)
 
-The velocity potential `φ(x) = ∫_S q(x')G(x-x')ds' = ∑ᵢqᵢϕ(x,pᵢ)` induced by an
+The velocity potential `φ(x) = ∫ₛ q(x')G(x-x')ds' = ∑ᵢqᵢϕ(x,pᵢ)` induced by an
 array of `panels` with strength `q`, and its gradient `∇φ(x) = ∑ᵢqᵢ∇ϕ(x,pᵢ)`.
 """
 φ(x,q,panels;G=source) = sum(qᵢ*ϕ(x,pᵢ;G) for (qᵢ,pᵢ) in zip(q,panels)) 
