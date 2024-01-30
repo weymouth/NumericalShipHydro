@@ -1,4 +1,4 @@
-include("util.jl")
+include("solve.jl")
 using Plots
 """
     sphere(h;a=1) -> Table(panel_props)
@@ -23,7 +23,6 @@ equator = filter(i->-h<z[i]<h,1:length(panels));
 nx,ny,_ = eachrow(stack(panels.n));
 quiver(x[equator],y[equator],quiver = (nx[equator],ny[equator]), aspect_ratio=:equal)
 
-include("solve.jl")
 A,b = ∂ₙϕ.(panels,permutedims(panels)),-Uₙ.(panels);
 q = A \ b; A*q ≈ b
 ma = added_mass(q,panels); ma[1]/(2π/3)-1

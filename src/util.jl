@@ -32,18 +32,3 @@ function SpecialFunctions.expintx(ϕ::Complex{<:Dual{Tag}}) where {Tag}
     u, v = reim(Ω); ∂u, ∂v = reim(Ω - inv(z))
     complex(Dual{Tag}(u, ∂u*px - ∂v*py), Dual{Tag}(v, ∂v*px + ∂u*py))
 end
-
-using LinearAlgebra: ×,⋅
-using TypedTables
-"""
-    param_props(S,ξ₁,ξ₂,dξ₁,dξ₂) -> (x,n̂,dA,T₁,T₂)
-
-Given a parametric surface function `x=S(ξ₁,ξ₂)`, return `x`, the unit 
-normal `n̂=n/|n|`, the surface area `dA≈|n|`, and the tangent vectors 
-`Tᵤ=dξ₁*∂x/∂ξ₁`,`Tᵥ=dξ₂*∂x/∂ξ₂`, where `n≡Tᵤ×Tᵥ`.
-"""
-function param_props(S,ξ₁,ξ₂,dξ₁,dξ₂)
-    T₁,T₂ = dξ₁*derivative(ξ₁->S(ξ₁,ξ₂),ξ₁),dξ₂*derivative(ξ₂->S(ξ₁,ξ₂),ξ₂) 
-    n = T₁×T₂; mag = hypot(n...)
-    (x=S(ξ₁,ξ₂), n=n/mag, dA=mag, T₁=T₁, T₂=T₂)
-end
