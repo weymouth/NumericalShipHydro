@@ -36,14 +36,14 @@ end
 using LinearAlgebra: ×,⋅
 using TypedTables
 """
-    param_props(S,u,v,du,dv) -> (x,n̂,dA,Tᵤ,Tᵥ)
+    param_props(S,ξ₁,ξ₂,dξ₁,dξ₂) -> (x,n̂,dA,T₁,T₂)
 
-Given a parametric surface function `x=S(u,v)`, return `x`, the unit 
+Given a parametric surface function `x=S(ξ₁,ξ₂)`, return `x`, the unit 
 normal `n̂=n/|n|`, the surface area `dA≈|n|`, and the tangent vectors 
-`Tᵤ=du*∂x/∂u`,`Tᵥ=dv*∂x/∂v`, where `n≡Tᵤ×Tᵥ`.
+`Tᵤ=dξ₁*∂x/∂ξ₁`,`Tᵥ=dξ₂*∂x/∂ξ₂`, where `n≡Tᵤ×Tᵥ`.
 """
-function param_props(S,u,v,du,dv)
-    Tu,Tv = du*derivative(u->S(u,v),u),dv*derivative(v->S(u,v),v) 
-    n = Tu×Tv; mag = hypot(n...)
-    (x=S(u,v), n=n/mag, dA=mag, Tu=Tu, Tv=Tv)
+function param_props(S,ξ₁,ξ₂,dξ₁,dξ₂)
+    T₁,T₂ = dξ₁*derivative(ξ₁->S(ξ₁,ξ₂),ξ₁),dξ₂*derivative(ξ₂->S(ξ₁,ξ₂),ξ₂) 
+    n = T₁×T₂; mag = hypot(n...)
+    (x=S(ξ₁,ξ₂), n=n/mag, dA=mag, T₁=T₁, T₂=T₂)
 end
