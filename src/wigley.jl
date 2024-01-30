@@ -37,3 +37,16 @@ inside(x,y,z) = abs(y/0.5B)<wigley(x/0.5L,z/D)
 cₚ(x,y,z,q,panels;U=[1,0,0],G=source) = 1-sum(abs2,U+∇φ([x,y,z],q,panels;G))/sum(abs2,U)
 contour(wpx,wpy,(x,y)->inside(x,y,0.) ? NaN : cₚ(x,y,0.,q,panels),aspect_ratio=:equal)
 title!("Wigley double-body x-y plane cₚ with h/D=$(h/D)")
+
+include("kelvin.jl")
+L,B,D,h = 3,1,1,0.25; panels = wigley_hull(h;L,B,D); length(panels)
+x,y,z = eachrow(stack(panels.x));
+equator = filter(i->-h<z[i]<h,1:length(panels));all(z .< 0)
+plot(x,y,z,camera=(-60,20),legend=false,aspect_ratio=:equal)
+U,G,k = [-1,0,0],kelvin,1
+A,b = ∂ₙϕ.(panels,permutedims(panels);G,k),-Uₙ.(panels;U);
+q = A \ b; A*q ≈ b
+u,v,w = eachrow(body_velocity(q,panels;U,G,k)); extrema(u)
+quiver(x[equator],y[equator],quiver = (u[equator],v[equator]), aspect_ratio=:equal)
+# elevation_plot(q,panels;G,k) very very slow
+plot(-1:0.1:1,ξ->ζ(0.5L*ξ,0.5B*wigley(ξ,0),q,panels;G,k))
