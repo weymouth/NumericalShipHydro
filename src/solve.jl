@@ -15,7 +15,8 @@ function param_props(S,ξ₁,ξ₂,dξ₁,dξ₂)
     (x=S(ξ₁,ξ₂), n=n/mag, dA=mag, T₁=T₁, T₂=T₂)
 end
 
-ξgl,ωgl = gausslegendre(2)./2 # use an even power to avoid ξ₁=ξ₂=0
+ξgl,ωgl = gausslegendre(2)./2 # use an even power to avoid ξ=0
+quadξ(f;x=ξgl,w=ωgl) = quadgl(f;x,w) # integrate over ξ=[-0.5,0.5]
 """
     ϕ(x,p;G=source)
     ∇ϕ(x,p;G=source)
@@ -23,9 +24,9 @@ end
 Approximate influence `ϕ(x) = ∫ₚ G(x-x')ds'` over panel `p`'s and it's gradient
 `∇ϕ` using automatic-differentiation, except at `x==p.x`, where `∇ϕ=2πn̂`.
 """
-@fastmath function ϕ(x,p;G=source,ξgl=ξgl,ωgl=ωgl)
+@fastmath function ϕ(x,p;G=source)
     sum(abs2,x-p.x)>9p.dA && return p.dA*G(x-p.x) # single-point quadrature
-    p.dA*quadgl(ξ₁->quadgl(ξ₂->G(x-p.x-ξ₁*p.T₁-ξ₂*p.T₂),x=ξgl,w=ωgl);x=ξgl,w=ωgl)
+    p.dA*quadξ(ξ₁->quadξ(ξ₂->G(x-p.x-ξ₁*p.T₁-ξ₂*p.T₂)))
 end
 ∇ϕ(x,p;G=source) = x==p.x ? 2π*p.n : gradient(x->ϕ(x,p;G),x)
 """ 
