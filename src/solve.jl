@@ -40,7 +40,6 @@ end
 Normal derivative of the influence of panel `pⱼ` on `pᵢ`.
 """
 ∂ₙϕ(pᵢ,pⱼ;kwargs...) = derivative(t->ϕ(pᵢ.x+t*pᵢ.n,pⱼ;kwargs...),0.)
-∂ₙϕ2(pᵢ,pⱼ;kwargs...) = gradient(x->ϕ(x,pⱼ;kwargs...),pᵢ.x) ⋅ pᵢ.n
 Uₙ(pᵢ;U=[1,0,0]) = U ⋅ pᵢ.n
 """
     φ(x,q,panels;kwargs...)
