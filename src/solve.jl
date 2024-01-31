@@ -14,36 +14,41 @@ function param_props(S,ξ₁,ξ₂,dξ₁,dξ₂)
     n = T₁×T₂; mag = hypot(n...)
     (x=S(ξ₁,ξ₂), n=n/mag, dA=mag, T₁=T₁, T₂=T₂)
 end
-
-ξgl,ωgl = gausslegendre(2)./2 # use an even power to avoid ξ=0
-quadξ(f;x=ξgl,w=ωgl) = quadgl(f;x,w) # integrate over ξ=[-0.5,0.5]
 """
     ϕ(x,p;G=source,kwargs...)
-    ∇ϕ(x,p;kwargs...)
 
-Approximate influence `ϕ(x) = ∫ₚ G(x,x')ds'` over panel `p`'s and it's gradient
-`∇ϕ` using automatic-differentiation, except at `x==p.x`, where `∇ϕ=2πn̂`.
+Approximate influence `ϕ(x) = ∫ₚ G(x,x')ds'` over panel `p`. The quadrature 
+is improved when `x∼p.x`. The gradient is overloaded with the exact value 
+`∇ϕ=2πn̂` when `x==p.x`.
 """
-@fastmath function ϕ(x,p;G=source,kwargs...)
+ϕ(x,p;kwargs...) = _ϕ(x,p;kwargs...) # wrapper
+@fastmath function _ϕ(x,p;G=source,kwargs...)
     sum(abs2,x-p.x)>9p.dA && return p.dA*G(x,p.x;kwargs...) # single-point quadrature
-    p.dA*quadξ(ξ₁->quadξ(ξ₂->G(x,p.x+ξ₁*p.T₁+ξ₂*p.T₂;kwargs...)))
+    p.dA*quadξ(ξ₁->quadξ(ξ₂->G(x,p.x+ξ₁*p.T₁+ξ₂*p.T₂;kwargs...))) # multipoint
 end
-∇ϕ(x,p;kwargs...) = x==p.x ? 2π*p.n : gradient(x->ϕ(x,p;kwargs...),x)
+quadξ(f;x=ξgl,w=ωgl) = quadgl(f;x,w) # integrate over ξ=[-0.5,0.5]
+ξgl,ωgl = gausslegendre(2)./2 # use an even power to avoid ξ=0
+
+function ϕ(d::Vector{<:Dual{Tag}},p;kwargs...) where Tag
+    value(d) ≠ p.x && return _ϕ(d,p;kwargs...) # use ∇ϕ=∇(_ϕ)
+    x,Δx = value.(d),stack(partials.(d))
+    Dual{Tag}(ϕ(x,p;kwargs...),2π*Δx*p.n...)   # enforce ∇ϕ(x,x)=2πn̂
+end
 """ 
     ∂ₙϕ(pᵢ,pⱼ;kwargs...) = A
 
 Normal derivative of the influence of panel `pⱼ` on `pᵢ`.
 """
-∂ₙϕ(pᵢ,pⱼ;kwargs...) = ∇ϕ(pᵢ.x,pⱼ;kwargs...) ⋅ pᵢ.n
+∂ₙϕ(pᵢ,pⱼ;kwargs...) = derivative(t->ϕ(pᵢ.x+t*pᵢ.n,pⱼ;kwargs...),0.)
+∂ₙϕ2(pᵢ,pⱼ;kwargs...) = gradient(x->ϕ(x,pⱼ;kwargs...),pᵢ.x) ⋅ pᵢ.n
 Uₙ(pᵢ;U=[1,0,0]) = U ⋅ pᵢ.n
 """
     φ(x,q,panels;kwargs...)
-    ∇φ(x,q,panels;kwargs...)
 
 The velocity potential `φ(x) = ∫ₛ q(x')G(x-x')ds' = ∑ᵢqᵢϕ(x,pᵢ)` induced by an
-array of `panels` with strength `q`, and its gradient `∇φ(x) = ∑ᵢqᵢ∇ϕ(x,pᵢ)`.
+array of `panels` with strength `q`.
 """
-φ(x,q,panels;kwargs...) = sum(qᵢ*ϕ(x,pᵢ;kwargs...) for (qᵢ,pᵢ) in zip(q,panels)) 
-∇φ(x,q,panels;kwargs...) = sum(qᵢ*∇ϕ(x,pᵢ;kwargs...) for (qᵢ,pᵢ) in zip(q,panels))
+φ(x,q,panels;kwargs...) = sum(qᵢ*ϕ(x,pᵢ;kwargs...) for (qᵢ,pᵢ) in zip(q,panels))
+∇φ(x,q,panels;kwargs...) = gradient(x->φ(x,q,panels;kwargs...),x)
 body_velocity(q,panels;U=[1,0,0],kwargs...) = map(x->U+∇φ(x,q,panels;kwargs...),panels.x) |> stack
 added_mass(q,panels;kwargs...) = sum(p->φ(p.x,q,panels;kwargs...)*p.n*p.dA,panels)
