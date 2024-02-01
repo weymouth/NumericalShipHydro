@@ -5,9 +5,9 @@ source(x,a) = -1/hypot(x-a...)
 """
     param_props(S,ξ₁,ξ₂,dξ₁,dξ₂) -> (x,n̂,dA,T₁,T₂)
 
-Given a parametric surface function `x=S(ξ₁,ξ₂)`, return `x`, the unit 
-normal `n̂=n/|n|`, the surface area `dA≈|n|`, and the tangent vectors 
-`T₁=dξ₁*∂x/∂ξ₁`,`T₂=dξ₂*∂x/∂ξ₂`, where `n≡T₁×T₂`.
+Properties of a parametric surface function `x=S(ξ₁,ξ₂)`. Returns `x`, 
+the unit normal `n̂=n/|n|`, the surface area `dA≈|n|`, and the tangent 
+vectors `T₁=dξ₁*∂x/∂ξ₁` and `T₂=dξ₂*∂x/∂ξ₂`, where `n≡T₁×T₂`.
 """
 function param_props(S,ξ₁,ξ₂,dξ₁,dξ₂)
     T₁,T₂ = dξ₁*derivative(ξ₁->S(ξ₁,ξ₂),ξ₁),dξ₂*derivative(ξ₂->S(ξ₁,ξ₂),ξ₂) 
@@ -17,9 +17,9 @@ end
 """
     ϕ(x,p;G=source,kwargs...)
 
-Approximate influence `ϕ(x) = ∫ₚ G(x,x')ds'` over panel `p`. The quadrature 
-is improved when `x∼p.x`. The gradient is overloaded with the exact value 
-`∇ϕ=2πn̂` when `x==p.x`.
+Approximate potential influence `ϕ(x) ≈ ∫ₚ G(x,x')ds'` of panel `p`. 
+The quadrature is improved when `x∼p.x`. The gradient is overloaded with 
+the exact value `∇ϕ=2πn̂` when `x=p.x`.
 """
 ϕ(x,p;kwargs...) = _ϕ(x,p;kwargs...) # wrapper
 @fastmath function _ϕ(x,p;G=source,kwargs...)
@@ -37,15 +37,14 @@ end
 """ 
     ∂ₙϕ(pᵢ,pⱼ;kwargs...) = A
 
-Normal derivative of the influence of panel `pⱼ` on `pᵢ`.
+Normal velocity influence of panel `pⱼ` on `pᵢ`.
 """
 ∂ₙϕ(pᵢ,pⱼ;kwargs...) = derivative(t->ϕ(pᵢ.x+t*pᵢ.n,pⱼ;kwargs...),0.)
 Uₙ(pᵢ;U=[1,0,0]) = U ⋅ pᵢ.n
 """
     φ(x,q,panels;kwargs...)
 
-The velocity potential `φ(x) = ∫ₛ q(x')G(x-x')ds' = ∑ᵢqᵢϕ(x,pᵢ)` induced by an
-array of `panels` with strength `q`.
+Potential `φ(x) = ∫ₛ q(x')G(x-x')ds' = ∑ᵢqᵢϕ(x,pᵢ)` of `panels` with strengths `q`.
 """
 φ(x,q,panels;kwargs...) = sum(qᵢ*ϕ(x,pᵢ;kwargs...) for (qᵢ,pᵢ) in zip(q,panels))
 ∇φ(x,q,panels;kwargs...) = gradient(x->φ(x,q,panels;kwargs...),x)
