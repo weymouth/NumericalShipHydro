@@ -26,7 +26,7 @@ the exact value `∇ϕ=2πn̂` when `x=p.x`.
     sum(abs2,x-p.x)>9p.dA && return p.dA*G(x,p.x;kwargs...) # single-point quadrature
     p.dA*quadξ(ξ₁->quadξ(ξ₂->G(x,p.x+ξ₁*p.T₁+ξ₂*p.T₂;kwargs...))) # multipoint
 end
-quadξ(f;x=ξgl,w=ωgl) = quadgl(f;x,w) # integrate over ξ=[-0.5,0.5]
+quadξ(f;xgl=ξgl,wgl=ωgl) = quadgl(f;xgl,wgl) # integrate over ξ=[-0.5,0.5]
 ξgl,ωgl = gausslegendre(2)./2 # use an even power to avoid ξ=0
 
 function ϕ(d::Vector{<:Dual{Tag}},p;kwargs...) where Tag
