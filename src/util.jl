@@ -1,11 +1,11 @@
 using FastGaussQuadrature
-xgl101, wgl101 = gausslegendre(101);
+xgl0, wgl0 = gausslegendre(50);
 """
     quadgl(f;w=wgl,x=xgl)
 
 Approximate ∫f(x)dx from x=[-1,1] using the Gauss-Legendre weights and points `w,x`.
 """
-@fastmath quadgl(f;wgl=wgl101,xgl=xgl101) = sum(wᵢ*f(xᵢ) for (wᵢ,xᵢ) in zip(wgl,xgl))
+@fastmath quadgl(f;wgl=wgl0,xgl=xgl0) = sum(wᵢ*f(xᵢ) for (wᵢ,xᵢ) in zip(wgl,xgl))
 """
     quadgl_inf(f;kwargs...)
 
