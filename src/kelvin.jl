@@ -3,21 +3,25 @@ include("solve.jl")
     kelvin(ξ,a;Fn=1,ltol=-5log(10),kwargs...)
 
 Green Function `G(ξ)` for a source at position `α` moving with `Fn≡U/√gL` below 
-the free-surface. This function assumes that the free surface location is ζ=0 
-and the apparent velocity direction is Û=[-1,0,0]. See Noblesse 1981 for details.
+the free-surface. The free surface is ζ=0, the coordinates are scaled by L and
+the apparent velocity direction is Û=[-1,0,0]. See Noblesse 1981 for details.
 Smaller log-tolerance `ltol` will only reduce errors when using a large number of
 Gauss-Legendre points. Otherwise, it leads to instability.
 """
 function kelvin(ξ,α;Fn=1,ltol=-5log(10),kwargs...)
     α[3] ≥ 0 && throw(DomainError(α[3],"Source must be below the free surface at ζ=0"))
+
     # Froude number scaled distances from the source's image
     x,y,z = (ξ-α .* [1,1,-1])/Fn^2
-    # Far-field oscillatory wave
+
+    # Wave-like far-field disturbance
     b = √max(ltol/z-1,0); a = max(x/abs(y),-b) # integration limits
     W = ifelse(a≥b || x==y==0, 0., 4*quadgl_ab(T->Wi(x,y,z,T),a,b;kwargs...))
-    # Near-field image and non-oscillatory wave
-    T₀ = ifelse(y==0,0,clamp(x/y,-b,b)); S = max(abs(T₀),π) # integral center & scale
+
+    # Near-field disturbance
+    T₀ = ifelse(y==0,0,clamp(x/y,-b,b)); S = max(abs(T₀),π) # center & scale
     N = 1/hypot(x,y,z)+2S/π*quadgl_inf(T->Ni(x,y,z,S*T-T₀);kwargs...)
+
     # Total Green function
     return source(ξ,α)+(N+W)/Fn^2
 end
