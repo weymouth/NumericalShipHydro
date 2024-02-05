@@ -1,5 +1,5 @@
 using FastGaussQuadrature
-xgl0, wgl0 = gausslegendre(50);
+xgl0, wgl0 = gausslegendre(32);
 """
     quadgl(f;w=wgl,x=xgl)
 

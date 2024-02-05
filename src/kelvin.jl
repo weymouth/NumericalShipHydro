@@ -1,6 +1,6 @@
 include("solve.jl")
 """
-    kelvin(ξ,a;Fn=1,ltol=-5log(10),kwargs...)
+    kelvin(ξ,a;Fn=1,ltol=-3log(10),kwargs...)
 
 Green Function `G(ξ)` for a source at position `α` moving with `Fn≡U/√gL` below 
 the free-surface. The free surface is ζ=0, the coordinates are scaled by L and
@@ -8,7 +8,7 @@ the apparent velocity direction is Û=[-1,0,0]. See Noblesse 1981 for details.
 Smaller log-tolerance `ltol` will only reduce errors when using a large number of
 Gauss-Legendre points. Otherwise, it leads to instability.
 """
-function kelvin(ξ,α;Fn=1,ltol=-5log(10),kwargs...)
+function kelvin(ξ,α;Fn=1,ltol=-3log(10),kwargs...)
     α[3] ≥ 0 && throw(DomainError(α[3],"Source must be below the free surface at ζ=0"))
 
     # Froude number scaled distances from the source's image
@@ -31,15 +31,14 @@ Wi(x,y,z,T) = exp((1+T^2)*z)*sin((x-abs(y)*T)*hypot(1,T))
 using Plots
 function source_elevation_plot(;Fn=1,kwargs...) # test function 
     ζ(x,y) = derivative(x->kelvin([x,y,0],[0,0,-1];Fn,kwargs...),x) # unit-point source
-    x,y = -15:0.1:3,-6:0.1:6; z = ζ.(x',y)
+    x,y = -14.7:0.1:3,-6:0.1:6; z = ζ.(x',y)
     mn,mx = round.(extrema(z),digits=1); 
-    contour(x,y,z/max(-mn,mx),levels=filter(≠(0),-0.9:0.15:0.9),aspect_ratio=:equal,
+    contour(x,y,z/max(-mn,mx),levels=filter(≠(0),-0.9:0.18:0.9),aspect_ratio=:equal,
         title="Point-source wave elevation, Fn=$Fn, ζ/Fn²=[$mn,$mx]",legend=false)
-end
+    end
 # @gif for Fn = 1:-0.02:0.2
-#     ζ(x,y) = derivative(x->kelvin([x,y,0],[0,0,-1];Fn),x) # unit-point source
-#     x,y = -15:0.1:3,-6:0.1:6; z = ζ.(x',y)/2.5
 #     rFn = round(Fn,digits=1)
-#     contour(x,y,z,levels=filter(≠(0),-0.9:0.15:0.9),
+#     ζ(x,y) = derivative(x->kelvin([x,y,0],[0,0,-1];Fn),x) # unit-point source
+#     contour(-15:0.1:3,-6:0.1:6,ζ,levels=filter(≠(0),-2.1:0.35:2.1),
 #         title="Point-source wave elevation, Fn=$rFn",legend=false)
 # end
