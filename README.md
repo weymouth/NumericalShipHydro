@@ -1,5 +1,5 @@
 # NumericalShipHydro
-Repository for the TU Delft course in Numerical Ship Hydro
+Repository for the TU Delft course in Numerical Ship Hydrodynamics
 ![Kelvin wave from a moving source](source-kelvin.png)
 
 Learning Objectives
