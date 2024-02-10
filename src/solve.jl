@@ -1,7 +1,9 @@
-using LinearAlgebra: ×,⋅
-using TypedTables
 include("util.jl")
+""" source(x,a) = 1/|x-a|"""
 source(x,a) = -1/hypot(x-a...)
+using LinearAlgebra: ×,⋅,tr
+using TypedTables,StaticArrays
+Base.adjoint(t::Table) = permutedims(t)
 """
     param_props(S,ξ₁,ξ₂,dξ₁,dξ₂) -> (x,n̂,dA,T₁,T₂)
 
@@ -29,7 +31,7 @@ end
 quadξ(f;xgl=ξgl,wgl=ωgl) = quadgl(f;xgl,wgl) # integrate over ξ=[-0.5,0.5]
 ξgl,ωgl = gausslegendre(2)./2 # use an even power to avoid ξ=0
 
-function ϕ(d::Vector{<:Dual{Tag}},p;kwargs...) where Tag
+function ϕ(d::AbstractVector{<:Dual{Tag}},p;kwargs...) where Tag
     value(d) ≠ p.x && return _ϕ(d,p;kwargs...) # use ∇ϕ=∇(_ϕ)
     x,Δx = value.(d),stack(partials.(d))
     Dual{Tag}(ϕ(x,p;kwargs...),2π*Δx*p.n...)   # enforce ∇ϕ(x,x)=2πn̂
