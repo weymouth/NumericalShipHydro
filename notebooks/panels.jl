@@ -4,13 +4,40 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
+# ╔═╡ 26cb711e-b608-4d9a-8063-2658d49adda6
+using PlutoUI
+
 # ╔═╡ 812f539d-1e44-42fe-bcad-11eeae92e181
 md"""
 # Numerical Panels & Julia Basics
 
-In this notebook, we will investigate different numerical methods to deal with the integral and derivatives of the panel Greens Function.
+In this notebook, we will investigate different numerical methods to deal with the integral and derivatives of the panel Greens Function. 
 
-This part of the course uses Julia which has a bunch of advantages that help when writing a panel method. It's simple and flexible and [very fast](https://julialang.org/benchmarks/) at numerical computing!
+Here is a sneak peak of the final plot of the flow around a 2D source panel.
+"""
+
+# ╔═╡ 8d7f2d16-f346-4d6f-b8b8-768f9368b160
+md"""center $(@bind pxc Slider(-2:0.1:2,default=0))"""
+
+# ╔═╡ 4781971c-fa05-44ad-8876-d351e07ac57c
+md"""width $(@bind pxh Slider(0.1:0.1:4,default=2))"""
+
+# ╔═╡ 3e8c14f4-d72a-44c6-85d9-9cf4e2f6a7d4
+md"""height $(@bind py Slider(-2:0.1:2,default=0))"""
+
+# ╔═╡ b3196c49-c99d-4b6c-bb63-aa9d55306f93
+md"""
+This plot is generated with [Julia](https://julialang.org/) which has a bunch of advantages that help when writing a panel method. It's simple and flexible and [very fast](https://julialang.org/benchmarks/) at numerical computing!
 
 ![Julia benchmarks](https://julialang.org/assets/images/benchmarks.svg)
 
@@ -25,7 +52,7 @@ Let's just start by plotting the Greens Function. We'll consider **2D flow** so 
 
 $G(x) = \frac 12 log(x^2)$
 
-Making functions with Julia is really easy (⚠️ no more `def G(x): return blah blah`⚠️)
+Making functions with Julia is really easy (no more `def G(x): return blah blah`)
 """
 
 # ╔═╡ 13634eb0-c8c2-11ee-265a-3b3b61815eb0
@@ -54,7 +81,7 @@ Julia makes it easy to deal with vectors, but Julia throw an error on `G(x)` bec
 """
 
 # ╔═╡ 48490cb3-c252-4165-b7de-88c2077160bb
-x = [-2,-1,0,1,2]
+x = [-1,-0.5,0,0.5,1]
 
 # ╔═╡ dfd90e9a-00d2-46ee-89ed-9508394e0ea2
 G(x) # needs a little help
@@ -193,7 +220,7 @@ Before applying this to our 2D flow case, the example above has a lot of new Jul
  - Anonymous (in-place) functions: `x->2x`
  - Vector transpose (adjoint) using `'`
  
-Let's dig into the transpose a bit more by looking at 3 different products of a two 4-vectors
+Let's dig into the transpose a bit more by looking at 3 different products of two  vectors.
 """
 
 # ╔═╡ bda29531-6902-42a9-b3c2-92b0e5a5547b
@@ -287,9 +314,8 @@ Let's put the tools together to plot the flow induced by a 2D panel. If you chan
 
 # ╔═╡ 27a974a0-de5c-4ed2-b6ba-bcb0f51f7381
 begin
-	panelx,panely = [-1,1],0  # move the panel around
 	source(x,x₀) = 0.5log((x-x₀)'*(x-x₀))
-	φ(x) = quadgl_ab(ξ->source(x,[ξ,panely]),panelx...)
+	φ(x) = quadgl_ab(ξ->source(x,[ξ,py]),pxc-pxh/2,pxc+pxh/2)
 	dφdx(x,y) = derivative(x->φ([x,y]),x)
 	dφdy(x,y) = derivative(y->φ([x,y]),y)
 end;
@@ -301,19 +327,24 @@ begin
 	Y = one(Np)*line'     # same
 	U = dφdx.(line,line') # broadcasts to [Np,Np]
 	V = dφdy.(line,line') # same
-	quiver(X,Y,quiver=(U,V))
-	plot!(panelx,[panely,panely],color=:black,label=nothing)
+	plt = quiver(X,Y,quiver=(U,V),xlims=(-6,6),ylim=(-6,6),size=(500,500))
+	plot!([pxc-pxh/2,pxc+pxh/2],[py,py],color=:black,label=nothing)
 end
+
+# ╔═╡ c6690d22-7cc0-4991-acf7-e66cbcc6f65f
+plt
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
 ForwardDiff = "~0.10.36"
 Plots = "~1.40.1"
+PlutoUI = "~0.7.55"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -322,7 +353,13 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "510a38bd7d505797937492a265887c18d3963377"
+project_hash = "94ebe1719335fda137ed347315a76752d153c844"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "c278dfab760520b8bb7e9511b968bf4ba38b7acc"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.2.3"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -589,6 +626,24 @@ git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
 
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.5"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.5"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "8b72179abc660bfab5e28472e019392b97d0985c"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.4"
+
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -769,6 +824,11 @@ git-tree-sha1 = "c1dd6d7978c12545b4179fb6153b9250c96b0075"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.0.3"
 
+[[deps.MIMEs]]
+git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "0.1.4"
+
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
 git-tree-sha1 = "2fa9ee3e63fd3a4f7a9a4f4744a52f4856de82df"
@@ -921,6 +981,12 @@ version = "1.40.1"
     IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "68723afdb616445c6caaef6255067a8339f91325"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.55"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -1086,6 +1152,11 @@ weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
     TestExt = ["Test", "Random"]
+
+[[deps.Tricks]]
+git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.8"
 
 [[deps.URIs]]
 git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
@@ -1423,6 +1494,12 @@ version = "1.4.1+1"
 
 # ╔═╡ Cell order:
 # ╟─812f539d-1e44-42fe-bcad-11eeae92e181
+# ╟─8d7f2d16-f346-4d6f-b8b8-768f9368b160
+# ╟─4781971c-fa05-44ad-8876-d351e07ac57c
+# ╟─3e8c14f4-d72a-44c6-85d9-9cf4e2f6a7d4
+# ╟─c6690d22-7cc0-4991-acf7-e66cbcc6f65f
+# ╟─26cb711e-b608-4d9a-8063-2658d49adda6
+# ╟─b3196c49-c99d-4b6c-bb63-aa9d55306f93
 # ╟─9b6b5d2b-a2f1-4378-9ae3-a9de62912d56
 # ╠═13634eb0-c8c2-11ee-265a-3b3b61815eb0
 # ╠═e1319af7-e552-48d7-bd91-4ea65c5adb17
