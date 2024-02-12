@@ -37,7 +37,7 @@ md"""height $(@bind py Slider(-2:0.1:2,default=0))"""
 
 # ╔═╡ b3196c49-c99d-4b6c-bb63-aa9d55306f93
 md"""
-This plot is generated with [Julia](https://julialang.org/) which has a bunch of advantages that help when writing a panel method. It's simple and flexible and [very fast](https://julialang.org/benchmarks/) at numerical computing!
+This plot is generated with [Julia](https://julialang.org/) which has many advantages for investigating and developing numerical methods. It's simple and flexible and [very fast](https://julialang.org/benchmarks/) at numerical computing!
 
 ![Julia benchmarks](https://julialang.org/assets/images/benchmarks.svg)
 
@@ -88,7 +88,7 @@ G(x) # needs a little help
 
 # ╔═╡ 72854972-c07a-4201-b6ea-7e75c2b06f1c
 md"""
-We've got three options
+We don't need a `for`-loop! Instead, we have three options to tell Julia to "vectorize" the function call
 
 1. We can use an [array comprehension](https://docs.julialang.org/en/v1/manual/arrays/#man-comprehensions) (just like in python).
 2. We can `map` the function over the array.
@@ -164,7 +164,7 @@ md"""
 
 We can predict the performance of quadratures by expressing $f$ in terms of it's Taylor series
 
-$f(x) = f_0+\frac x2 f_0' + \frac{x^2}6 f_0'' + \frac{x^3}{12} f_0''' + \ldots$
+$f(x) = f_0 + xf_0' + \frac{x^2}2 f_0'' + \frac{x^3}{6} f_0''' + \ldots$
 
 where subscript $0$ denotes evaluation at $x=0$ and each tick $'$ indicates a derivative. Substitution into the integral and algebraic manipulation gives:
  - mid-point: $F = hf_0 + \frac 1{24} h^3 f_0'' + O(h^4)$
@@ -173,7 +173,7 @@ where subscript $0$ denotes evaluation at $x=0$ and each tick $'$ indicates a de
 
 where $O(h^4)$ means all the following terms are proportional to $h$ to the power of 4 or greater. Since the quadrature neglected these additional terms, they have a well-defined _truncation error_.
 
-|Type 4: Numerical truncation error|
+|Type 3: Numerical truncation error|
 |:---:| 
 |Errors due to truncating an infinite series at some power of the step length $h$|
 
