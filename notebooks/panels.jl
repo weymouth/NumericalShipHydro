@@ -237,7 +237,7 @@ u * v' # outer product! [u[i]*v[j] forall i,j]
 
 # ╔═╡ b6d91d56-9e69-4619-b231-7b844339131c
 md"""
-We've used the **inner product** to do the Gaussian quadrature weighted sum, and we'll use the **outer product** below. 
+We've used the **inner product** to do the Gaussian quadrature weighted sum and the **outer product** is how I made the X-Y grid of points for the 2D flow map shown at the top of the page. 
 
 ## Back to 2D flow
 
@@ -295,14 +295,27 @@ The finite difference results are surprisingly bad! We've used the smallest step
 |Type 4: Floating Point Arithmetic Error|
 |:---:|
 |Errors due to representing real numbers with a finite precision binary number|
+"""
 
-While a [double-precision number](https://en.wikipedia.org/wiki/Floating-point_arithmetic) (the Julia default) is typically fine, finite differences over small intervals become unstable due to rounding.
+# ╔═╡ ecf9dcac-02a8-4981-bc28-d18463f0f78b
+begin 
+	plot(10 .^(-16:0.25:-1),h->abs(dG_finite(0.2;h)-dG_hand(0.2)),label=false,
+		yscale=:log10,ylabel="Finite difference error",xscale=:log10, xlabel="h")
+	plot!([1e-15,1e-6],[1e-1,1e-10],label="floating point error trend",ls=:dash)
+	plot!([1e-6,1e-1],[1e-10,1],label="truncation error trend",ls=:dash)
+end
 
-In contrast, AutoDiff generates functions **for the analytic derivatives!** And doing so automatically avoids potential blunders in our hand calculation and bugs in our implementation.
+# ╔═╡ c7ff9333-8bc0-4cae-9cb9-0bc94081aedf
+md"""
+While a [double-precision number](https://en.wikipedia.org/wiki/Floating-point_arithmetic) (the Julia default) has sufficient accuracy for our panel code, the finite differences become unstable due to rounding over small intervals. In the plot above, you can see the balance between trancation errors and floating point errors over a wide range of finite difference step sizes $h$.
+
+In contrast, AutoDiff generates functions for the **analytic derivative** automatically. This avoids both types of numerical errors shown above. It also avoids common *human errors*, such as mistakes in our hand calculation and bugs in our implementation.
 
 |Type 5: Human Error|
 |:---:|
 |Mistakes in the developement or use of a prediction method|
+
+We will use AutoDiff where ever possible in this code.
 """
 
 # ╔═╡ 5742ada4-97bf-4d37-be37-29989b8859de
@@ -322,7 +335,7 @@ end;
 
 # ╔═╡ 9f0bfe18-b251-4649-b355-55c13be36e7d
 begin
-	Np = 20; line = range(-5,5,Np)
+	Np = 16; line = range(-5,5,Np)
 	X = line*ones(Np)'    # X is a [Np,Np] matrix
 	Y = one(Np)*line'     # same
 	U = dφdx.(line,line') # broadcasts to [Np,Np]
@@ -340,11 +353,6 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-
-[compat]
-ForwardDiff = "~0.10.36"
-Plots = "~1.40.1"
-PlutoUI = "~0.7.55"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -353,7 +361,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "94ebe1719335fda137ed347315a76752d153c844"
+project_hash = "ad0695db09671b701310c34782b7b6e1eb2c4235"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -445,9 +453,9 @@ version = "1.0.5+1"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
-git-tree-sha1 = "9c4708e3ed2b799e6124b5673a712dda0b596a9b"
+git-tree-sha1 = "8cfa272e8bdedfa88b6aefbbca7c19f1befac519"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
-version = "2.3.1"
+version = "2.3.0"
 
 [[deps.Contour]]
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
@@ -964,9 +972,9 @@ version = "1.4.0"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "PrecompileTools", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "UnitfulLatexify", "Unzip"]
-git-tree-sha1 = "c4fa93d7d66acad8f6f4ff439576da9d2e890ee0"
+git-tree-sha1 = "38a748946dca52a622e79eea6ed35c6737499109"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.40.1"
+version = "1.40.0"
 
     [deps.Plots.extensions]
     FileIOExt = "FileIO"
@@ -1145,9 +1153,9 @@ deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.TranscodingStreams]]
-git-tree-sha1 = "54194d92959d8ebaa8e26227dbe3cdefcdcd594f"
+git-tree-sha1 = "1fbeaaca45801b4ba17c251dd8603ef24801dd84"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.10.3"
+version = "0.10.2"
 weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
@@ -1527,14 +1535,16 @@ version = "1.4.1+1"
 # ╠═47578e40-c922-4475-9e78-e82e21e03243
 # ╠═3592f424-bee5-4a64-a159-b302824f7f35
 # ╟─b6d91d56-9e69-4619-b231-7b844339131c
-# ╠═c380ce87-810a-4d54-a0ea-0b3c240b53bf
+# ╟─c380ce87-810a-4d54-a0ea-0b3c240b53bf
 # ╟─b90bcba2-530f-4af4-b176-4c2111a8738a
 # ╠═3cd0a074-1b6e-4249-8472-7798e8ce5f96
 # ╠═6f1144e2-6084-48e2-9005-53dba30bd6a7
-# ╠═3773e94f-0104-4d15-816e-d5f84cbea7ac
+# ╟─3773e94f-0104-4d15-816e-d5f84cbea7ac
 # ╟─e54d114d-283c-4180-a8cb-cacef9179a32
+# ╟─ecf9dcac-02a8-4981-bc28-d18463f0f78b
+# ╟─c7ff9333-8bc0-4cae-9cb9-0bc94081aedf
 # ╟─5742ada4-97bf-4d37-be37-29989b8859de
 # ╠═27a974a0-de5c-4ed2-b6ba-bcb0f51f7381
-# ╠═9f0bfe18-b251-4649-b355-55c13be36e7d
+# ╟─9f0bfe18-b251-4649-b355-55c13be36e7d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
