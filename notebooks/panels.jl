@@ -326,11 +326,11 @@ Let's put the tools together to plot the flow induced by a 2D panel. If you chan
 """
 
 # ╔═╡ 27a974a0-de5c-4ed2-b6ba-bcb0f51f7381
-begin
-	source(x,x₀) = 0.5log((x-x₀)'*(x-x₀))
-	φ(x) = quadgl_ab(ξ->source(x,[ξ,py]),pxc-pxh/2,pxc+pxh/2)
-	dφdx(x,y) = derivative(x->φ([x,y]),x)
-	dφdy(x,y) = derivative(y->φ([x,y]),y)
+begin # generalized 2D source
+	source(x,y,x₀,y₀) = 0.5log((x-x₀)^2+(y-y₀)^2)
+	φ(x,y) = quadgl_ab(ξ->source(x,y,ξ,py),pxc-pxh/2,pxc+pxh/2)
+	dφdx(x,y) = derivative(x->φ(x,y),x)
+	dφdy(x,y) = derivative(y->φ(x,y),y)
 end;
 
 # ╔═╡ 9f0bfe18-b251-4649-b355-55c13be36e7d
