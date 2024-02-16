@@ -1,17 +1,19 @@
 using FastGaussQuadrature
-xgl0, wgl0 = gausslegendre(32);
+xgl32, wgl32 = gausslegendre(32)
 """
-    quadgl(f;w=wgl,x=xgl)
+    quadgl(f;wgl=[1,1],xgl=[-1/√3,1/√3])
 
 Approximate ∫f(x)dx from x=[-1,1] using the Gauss-Legendre weights and points `w,x`.
 """
-@fastmath quadgl(f;wgl=wgl0,xgl=xgl0) = sum(wᵢ*f(xᵢ) for (wᵢ,xᵢ) in zip(wgl,xgl))
+@fastmath quadgl(f;wgl=SA[1,1],xgl=SA[-1/√3,1/√3]) = wgl'*f.(xgl)
+
 """
     quadgl_inf(f;kwargs...)
 
 Approximate ∫f(x)dx from x=[-∞,∞] using `quadgl` with the change of variable x=t/(1-t^2).
 """
 @fastmath quadgl_inf(f;kwargs...) = quadgl(t->f(t/(1-t^2))*(1+t^2)/(1-t^2)^2;kwargs...)
+
 """
     quadgl_ab(f,a,b;kwargs...)
 

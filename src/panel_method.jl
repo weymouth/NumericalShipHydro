@@ -1,9 +1,4 @@
-include("util.jl")
-""" source(x,a) = 1/|x-a|"""
-source(x,a) = -1/hypot(x-a...)
 using LinearAlgebra: ×,⋅,tr
-using TypedTables,StaticArrays
-Base.adjoint(t::Table) = permutedims(t)
 """
     param_props(S,ξ₁,ξ₂,dξ₁,dξ₂) -> (x,n̂,dA,T₁,T₂)
 
@@ -28,8 +23,7 @@ the exact value `∇ϕ=2πn̂` when `x=p.x`.
     sum(abs2,x-p.x)>9p.dA && return p.dA*G(x,p.x;kwargs...) # single-point quadrature
     p.dA*quadξ(ξ₁->quadξ(ξ₂->G(x,p.x+ξ₁*p.T₁+ξ₂*p.T₂;kwargs...))) # multipoint
 end
-quadξ(f;xgl=ξgl,wgl=ωgl) = quadgl(f;xgl,wgl) # integrate over ξ=[-0.5,0.5]
-ξgl,ωgl = gausslegendre(2)./2 # use an even power to avoid ξ=0
+quadξ(f) = 0.5quadgl(x->f(0.5x)) # integrate over ξ=[-0.5,0.5]
 
 function ϕ(d::AbstractVector{<:Dual{Tag}},p;kwargs...) where Tag
     value(d) ≠ p.x && return _ϕ(d,p;kwargs...) # use ∇ϕ=∇(_ϕ)
