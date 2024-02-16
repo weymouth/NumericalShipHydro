@@ -1,4 +1,3 @@
-using LinearAlgebra: ×,⋅,tr
 """
     param_props(S,ξ₁,ξ₂,dξ₁,dξ₂) -> (x,n̂,dA,T₁,T₂)
 

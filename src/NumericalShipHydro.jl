@@ -1,9 +1,11 @@
 module NumericalShipHydro
 
-# Useful datatypes
+# Useful datatypes & functions
 using Reexport
 @reexport using TypedTables,StaticArrays
 Base.adjoint(t::Table) = permutedims(t)
+@reexport using ForwardDiff: derivative,gradient
+@reexport using LinearAlgebra: ×,⋅,tr
 
 # Basic integration/derivative utilities
 include("util.jl")
