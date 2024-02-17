@@ -48,7 +48,7 @@ Sample a sphere of radius `R` such that the arc-length ≈ h in each direction.
 """
 function sphere(h;R=1)
     S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)]
-    dθ₁ = π/round(π*R/h) # azimuth step size such that Rdθ₁=π/n≈h
+    dθ₁ = π/round(π*R/h) # azimuth step size
     mapreduce(vcat,0.5dθ₁:dθ₁:π) do θ₁
         dθ₂ = 2π/round(2π*R*sin(θ₁)/h) # polar step size at this azimuth
         param_props.(S,θ₁,0.5dθ₂:dθ₂:2π,dθ₁,dθ₂)
@@ -58,10 +58,6 @@ end
 # ╔═╡ 71df011e-bf21-47c3-85f0-18a9aca54fee
 md"""
 The function sets the azimuth and polar spacings so each panel's arc length is approximately $h$. Then, it evaluates the function `S(θ₁,θ₂)` at those spacings, filling a vector with all the panel information using the `param_props` function defined in `NumericalShipHydro`. 
-
-#### Activity
- - What is `mapreduce`?
- - Why not simply use `param_props.(S,θ₁_range,θ₂_range,dθ₁,dθ₂)`?
 
 Let's set the panel size to `h=0.5R` and create an array of panels.
 """
@@ -99,7 +95,9 @@ end
 
 # ╔═╡ b40064aa-c1b6-46c6-86fc-87661b3d4d27
 md"""
-Looks good. 
+#### Activity
+ - Discuss why a uniform panel size might be a good idea for this problem.
+ - What happens if we use a constant dθ₂ value? Try it, but fix if needed.
 
 Note that the number of panels is approximately $N\approx 4\pi R^2/h^2$. This shows that $N \sim 1/h^2$, which we might worry us as we start thinking about how to solve for the flow on these panels.
 """
@@ -110,11 +108,11 @@ md"""
 
 The potential of the full sphere is simply the superposition of each panel's contribution,
 
-$\phi(x) = \sum_{i=1}^N q_i \varphi_i(x)$
+$\Phi(x) = \sum_{i=1}^N q_i \varphi_i(x)$
 
-where $N$ is the number of panels, $q$ is the vector of **unknown** panel strengths and $\varphi_i$ is influence of panel $i$.
+where $N$ is the number of panels, $q$ is the vector of **unknown** panel strengths and $\varphi_i$ is influence of panel $i$. (Annoyingly, the characters ϕ and φ are rendered interchangably. They mean the same thing.)
 
-Since we used a $G$ satisfying $\nabla^2 G=0$ and this equation is linear, _any_ vector $q$ will satisfy the laplace equation $\nabla^2\phi=0$ and be a valid potential flow. This is nice since we can't mess that up, but it means we need an additional equation to determine the _correct_ $q$ for a given geometry and flow condition.
+Our panel potential $\varphi_i$ uses a source as it's Greens function $G=-1/r$. Since $\nabla^2 G=0$, _any_ vector $q$ will satisfy the laplace equation $\nabla^2\Phi=0$ and be a valid potential flow. This is nice since we can't mess that up, but it means we need an additional equation to determine the _correct_ $q$ for a given geometry and flow condition.
 
 > 3. _How can we determine the correct $q$ for each panel?_ 
 """
@@ -124,7 +122,7 @@ md"""
 ## Apply boundary conditions
 
 The additional equations from our problem description are the boundary conditions. Defining $\vec U$ as the free stream velocity and $\hat n$ as the surface normal, the conditions in an infinite fluid (no free surface) are
- - Flow tangency on the solid body's surface: $U_n+u_n = U_n+\frac{\partial\phi}{\partial n}=0$
+ - Flow tangency on the solid body's surface: $U_n+u_n = U_n+\frac{\partial\Phi}{\partial n}=0$
  - No disturbance far from the body: $u(\infty)\rightarrow 0$ 
 
 The second condition is achieved automatically since $u(r) \sim \frac{\partial G}{\partial r} = 1/r^2$. Therefore, the first condition must be used to set $q$.
@@ -163,15 +161,17 @@ end
 
 # ╔═╡ 6d5d2289-15df-47ba-82ff-2d5bf18627de
 md"""
+The code above uses a `ϕ` function defined in `NumericalShipHydro` which integrates the source Greens function using Gauss points, but is otherwise complete.
+
 #### Activity
- - What is that weird `derivative(t->ϕ(x+t*n))` stuff? Why not use `gradient(ϕ)⋅n`?
  - How big is `A`? How does this scale with `h`? Is that a problem?
+ - What is that `derivative(t->ϕ(x+t*n))` stuff? Why not use `gradient(ϕ)⋅n`?
 
 ## Verification
 
 We got the solution to the linear system we created, but was that the right system? And how accurate is the solution?
 
-4. _How should we determine if a method is working?_ 
+> 4. _How should we determine if a method is working?_ 
 
 First, lets **verify** that the influence matrix and excitation vector values are reasonable.
 """
@@ -207,21 +207,17 @@ The analytic potential flow surface velocity on the sphere is
 
 $u_\alpha = \frac 32 U \sin(\alpha)$
 
-where $\alpha$ is the angle of the surface point with respect to the flow direction. 
-
-The numerical solution's velocity is 
-
-$\vec u = \vec U + \vec\nabla\phi$
+where $\alpha$ is the angle of the surface point with respect to the flow direction.
 """
 
 # ╔═╡ 708e7a92-95d0-43af-9805-047399dc38a3
 begin
 	# Functions to compute disturbance potential and velocity
-	φ(x,q,panels) = q'*ϕ.(Ref(x),panels)
-	∇φ(x,q,panels) = gradient(x->φ(x,q,panels),x)
+	Φ(x,q,panels) = q'*ϕ.(Ref(x),panels)
+	∇Φ(x,q,panels) = gradient(x->Φ(x,q,panels),x)
 
 	# Velocity magnitude |u| on panel centroids
-	abs_u(q,panels) = map(x->hypot(U+∇φ(x,q,panels)...),panels.x)
+	abs_u(q,panels) = map(x->hypot(U+∇Φ(x,q,panels)...),panels.x)
 	
 	# Get the angle and velocity
 	function alpha_velocity(panels)
@@ -247,7 +243,7 @@ Not bad, but there is some error.
  3. Truncation
  3. Finite precision
  3. Human
- - Make changes to the code above to demonstrate it.
+ - Confirm/refute your theory by adding to the code above.
 """
 
 # ╔═╡ a4da9745-2e0b-4933-8b47-a6bb4cdb0268
@@ -256,9 +252,9 @@ md"""
 
 We can further quantify the panel method's error by computing a relevant **integrated quantity**. The added mass matrix is a good choice for potential flows, which is defined as 
 
-$m_{i,j} = -\rho\oint_S \tilde\phi_i n_j da$
+$m_{i,j} = -\rho\oint_S \tilde\Phi_i n_j da$
 
-where $\rho$ is the fluid desity and $\tilde\phi_i$ is the scaled potential resulting from unit velocity in direction $i$. The forces due to an acceleration vector $a$ are then $f = Ma$.
+where $\rho$ is the fluid desity and $\tilde\Phi_i$ is the scaled potential resulting from unit velocity in direction $i$. The forces due to an acceleration vector $a$ are then $f = Ma$.
 
 The analytic solution for a sphere is $\frac 23 \rho \pi R^3$ on the diagonal and zero for the off diagonals. How does our numerical method perform?
 """
@@ -269,7 +265,7 @@ begin
 	    A = ∂ₙϕ.(panels,panels')
 	    B = stack(panels.n)' # all three excitations
 	    Q = A \ B            # solve for all three q's
-	    -ρ*sum(p->φ(p.x,Q,panels)*p.n'*p.dA,panels)
+	    -ρ*sum(p->Φ(p.x,Q,panels)*p.n'*p.dA,panels)
 	end
 	added_mass(panels)/(2π/3) # scale by exact solution
 end
@@ -280,7 +276,7 @@ Notice the off diagonals are near machine precision zero. Again, the values are 
 
 #### Actitivity:
  - Write a function `sphere_ma_error(h)` which computes the percent error of `tr(M)`.
- - Make a plot of $h/R$ vs the `tr(M)` error and assess if the code is validated
+ - Make a plot of $h/R$ vs the `tr(M)` error. Is the code validated?
  - What valueof $h$ is pragmatic, and how might you generalize this to other geometries?
 """
 
