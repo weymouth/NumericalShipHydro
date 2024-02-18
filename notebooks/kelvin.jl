@@ -51,7 +51,7 @@ begin
 	Ni(x,y,z,T) = real(expintx(complex((1+T^2)*z,eps(T)+(x+y*T)*hypot(1,T))))
 	Wi(x,y,z,T) = exp((1+T^2)*z)*sin((x-abs(y)*T)*hypot(1,T))
 	dψ(x,y,T) = (x*T-abs(y)*(2T^2+1))^4/(1+T^2)^2
-	dψπ(x,y) = dψ(x,y,2π)
+	dψπ(x,y) = dψ(x,y,π)
 	Wi2(x,y,z,T) = exp((1+T^2)*z-dψ(x,y,T)/dψπ(x,y))*sin((x-abs(y)*T)*hypot(1,T))
 end
 
@@ -101,12 +101,14 @@ end
 begin
 	f(T)=(1+T^2)*z-dψ(x,y,T)/dψπ(x,y)-ltol/2
 	root(f,b) = (while abs(f(b))>1e-2
+		@show b,f(b)
 		b -= f(b)/derivative(f,b)
 	end; b)
-	b1 = root(f,-ltol/2)
-	a1 = a
+	b1 = root(f,sqrt(-1/(z-0.1)))
+	a1 = x/abs(y); a1<0 && f(a1)<0 && (a1 = root(f,a1))
 	h,j = (b1-a1)/2,(a1+b1)/2
-	plt1 = plot(range(-1,1,1000),T->h*Wi(x,y,z,h*T+j),ylabel="Wᵢ",label=nothing 	 ,title="Rescaled with Gauss points")
+	plt1 = plot(range(-1,1,1000),T->h*Wi(x,y,z,h*T+j),ylabel="Wᵢ",label=nothing,
+						title="Rescaled with Gauss points")
 	scatter!(plt1,xgl,T->h*Wi(x,y,z,h*T+j),c=:lightblue,label=nothing)
 	inf(f,t) = f(t/(1-t^2))*(1+t^2)/(1-t^2)^2
 	plt2 = plot(range(-1,1,1000),T->S*inf(T->Ni(x,y,z,S*T-T₀),T),ylabel="Nᵢ",label=nothing,c=:orange)
