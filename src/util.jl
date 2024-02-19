@@ -24,6 +24,17 @@ Approximate ∫f(x)dx from x=[a,b] using `quadgl` with the change of variable x=
     h*quadgl(t->f(j+h*t);kwargs...)
 end
 
+"""
+    root(f,x₀,ftol=0.1)
+
+Find the root of `f(x)` with initial guess `x₀` within a given `ftol`.
+"""
+function root(f,x₀,ftol=0.1) 
+    while f(x₀)<-ftol 
+        x₀ -= f(x₀)/derivative(f,x₀)
+    end; x₀
+end
+
 using SpecialFunctions
 using ForwardDiff: derivative, gradient, value, partials, Dual
 # Fix automatic differentiation of expintx(Complex(Dual))
