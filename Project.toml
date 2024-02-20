@@ -1,7 +1,7 @@
 name = "NumericalShipHydro"
 uuid = "ceb80a28-d60b-4c49-86c4-24861104d1ed"
 authors = ["Gabriel Weymouth"]
-version = "1.0.0-DEV"
+version = "0.1.0"
 
 [deps]
 FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
