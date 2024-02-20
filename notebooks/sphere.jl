@@ -266,6 +266,7 @@ source(x,a) = -1/hypot(x-a...)
 
 # ╔═╡ a27c18d1-465f-457a-a8bf-ff0722def379
 begin
+	# Define function using adaptive quadrature
 	@fastmath function _ϕ(x,p;G=source,kwargs...)
 		# mid-point quadrature
 	    sum(abs2,x-p.x)>9p.dA && return p.dA*G(x,p.x;kwargs...)
@@ -273,12 +274,15 @@ begin
 	    p.dA*quadξ(ξ₁->quadξ(ξ₂->G(x,p.x+ξ₁*p.T₁+ξ₂*p.T₂;kwargs...)))
 	end
 	@fastmath quadξ(f) = SA[0.5,0.5]'*f.(SA[-0.5/√3,0.5/√3])
+
+	# Enforce exact derivative when x=p.x 
 	using ForwardDiff:Dual,partials,value
 	function ϕ(d::AbstractVector{<:Dual{Tag}},p;kwargs...) where Tag
 	    value(d) ≠ p.x && return _ϕ(d,p;kwargs...) # use ∇ϕ=∇(_ϕ)
 	    x,Δx = value.(d),stack(partials.(d))
 	    Dual{Tag}(ϕ(x,p;kwargs...),2π*Δx*p.n...)   # enforce ∇ϕ(x,x)=2πn̂
 	end
+
 	"""
 	    ϕ(x,p;G=source,kwargs...)
 	
