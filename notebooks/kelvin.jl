@@ -94,7 +94,7 @@ begin
 
 	using Printf: @sprintf
 	Wgk = quadgk_count(T->Wi(x,y,z,T,damp),x/abs(y),Inf)
-	Ngk = quadgk_count(T->Ni(x,y,z,T),-Inf,x/y,Inf)
+	Ngk = quadgk_count(T->Ni(x,y,z,T),-Inf,Inf)
 	sWgk=@sprintf "∫Wᵢ=%.3f, error≈%.1e, fevals=%i" Wgk...
 	sNgk=@sprintf "∫Nᵢ=%.3f, error≈%.1e, fevals=%i" Ngk...
 end;
@@ -111,8 +111,7 @@ begin
 	ltol = -3log(10)
 
 	#integration limits
-	a = x/abs(y)
-	b = max(√max(ltol/z-1,0),a)
+	b = √max(ltol/z-1,0); a = max(x/abs(y),-b)
 
 	using Plots
 	plot(range(min(-4,a),b,1000),T->Ni(x,y,z,T),label=sNgk,
@@ -120,8 +119,8 @@ begin
 	damp &&	plot!(range(a,b,1000),T->Wi(x,y,z,T,false),
 			label=nothing,color=:blue,alpha=0.2)
 	damp &&	Tn(x,y)<b && vline!([Tn(x,y)],label=nothing,alpha=0.5)
+	a>-b && scatter!([a],[Wi(x,y,z,a,damp)],c=:blue,label=nothing)
 	plot!(range(a,b,1000),T->Wi(x,y,z,T,damp),label=sWgk,color=:blue)
-	scatter!([a],[Wi(x,y,z,a,damp)],c=:blue,label=nothing)
 end
 
 # ╔═╡ b5f9c1fc-ddc4-47d8-99dd-6f707bdd8fe7
@@ -161,10 +160,12 @@ is all we need.
 """
 
 # ╔═╡ 219b0b75-2f1e-4c12-af88-b1f6b28e002d
-md"""magic fix $magic,   
-Gauss points $(@bind n Slider([8,16,32,64,128],default=32,show_value=true))
-
-x $xs,  y $ys,  z $zs"""
+begin
+	gs = @bind n Slider([8,16,32,64,128],default=32,show_value=true)
+	md"""magic fix $magic,  Gauss points $gs
+	
+	x $xs,  y $ys,  z $zs"""
+end
 
 # ╔═╡ a5c6d1cd-371c-4d07-ad52-c8b54ec6531b
 begin
@@ -244,7 +245,7 @@ function kelvin(ξ,α;Fn=1,ltol=-3log(10),xgl=xgl,wgl=wgl)
     x,y,z = (ξ-α .* SA[1,1,-1])/Fn^2
 
     # Wave-like far-field disturbance
-	b = damp ? Tn(x,y) : √max(ltol/z-1,0); a = max(x/abs(y),-b)
+	b = √max(ltol/z-1,0); damp && (b=min(Tn(x,y),b)); a = max(x/abs(y),-b)
     W = ifelse(a≥b || x==y==0, 0., 4*quadgl_ab(T->Wi(x,y,z,T,damp),a,b;xgl,wgl))
 
     # Near-field disturbance
@@ -255,17 +256,17 @@ function kelvin(ξ,α;Fn=1,ltol=-3log(10),xgl=xgl,wgl=wgl)
     return source(ξ,α)+(N+W)/Fn^2
 end
 
-# ╔═╡ 5a5484e3-a47d-4788-a765-be436d34732b
-kelvin(SA[x,y,0],SA[0,0,z])
-
 # ╔═╡ c97dc4e6-1bed-47c8-9cdd-dea857ae62e7
-md"""Fn $(@bind Fn Slider(0.4:0.2:2,default=1,show_value=true))
-
-magic fix $magic"""
+begin
+	Fns = @bind Fn Slider(0.4:0.2:2,default=1,show_value=true)
+	md"""Fn $Fns,  Gauss points $gs
+	
+	magic fix $magic,  z $zs"""
+end
 
 # ╔═╡ beff6b0c-0ba9-4165-b425-fa9f14a7cfeb
 begin
-	f(x,y) = kelvin(SA[x',y,0],SA[0,0,-1];Fn)
+	f(x,y) = kelvin(SA[x',y,0],SA[0,0,z];Fn)
 	xg,yg = -14.7:0.1:3,-6:0.1:6
 	zg = f.(xg',yg)
 end;
@@ -286,13 +287,12 @@ contour(xg,yg,zg,clims=(-3,1.5))
 # ╟─b5f9c1fc-ddc4-47d8-99dd-6f707bdd8fe7
 # ╟─7898c3e1-6224-4200-9bae-e1d68627c6ab
 # ╟─f4cdf4bc-2bce-4cf8-a8d2-08d4a0659317
-# ╠═a5c6d1cd-371c-4d07-ad52-c8b54ec6531b
+# ╟─a5c6d1cd-371c-4d07-ad52-c8b54ec6531b
 # ╟─219b0b75-2f1e-4c12-af88-b1f6b28e002d
 # ╟─08e89998-ff24-4fc2-bb3a-c40f86a46a70
 # ╟─f02d582e-5e07-49fa-a006-258c635464e9
-# ╠═2b2235df-4045-46d5-a099-1d68d52790d1
-# ╠═c9971990-866c-4623-a99f-1719191df4db
-# ╠═5a5484e3-a47d-4788-a765-be436d34732b
-# ╠═c97dc4e6-1bed-47c8-9cdd-dea857ae62e7
+# ╟─2b2235df-4045-46d5-a099-1d68d52790d1
+# ╟─c9971990-866c-4623-a99f-1719191df4db
+# ╟─c97dc4e6-1bed-47c8-9cdd-dea857ae62e7
 # ╠═beff6b0c-0ba9-4165-b425-fa9f14a7cfeb
 # ╟─94bca517-3338-41fd-abdb-c99b3a340249

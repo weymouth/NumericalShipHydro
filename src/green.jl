@@ -20,7 +20,7 @@ function kelvin(ξ,α;Fn=1,ltol=-3log(10),xgl=xgl32,wgl=wgl32)
     x,y,z = (ξ-α .* SA[1,1,-1])/Fn^2
 
     # Wave-like far-field disturbance
-    b = min(-2ltol,√max(ltol/z-1,0)); a = max(x/abs(y),-b) # integration limits
+    b = min(Tn(x,y),√max(ltol/z-1,0)); a = max(x/abs(y),-b) # integration limits
     W = ifelse(a≥b || x==y==0, 0., 4*quadgl_ab(T->Wi(x,y,z,T),a,b;xgl,wgl))
 
     # Near-field disturbance
@@ -31,7 +31,9 @@ function kelvin(ξ,α;Fn=1,ltol=-3log(10),xgl=xgl32,wgl=wgl32)
     return source(ξ,α)+(N+W)/Fn^2
 end
 Ni(x,y,z,T) = real(expintx(complex((1+T^2)*z,eps(T)+(x+y*T)*hypot(1,T))))
-Wi(x,y,z,T) = exp((1+T^2)*z)*sin((x-abs(y)*T)*hypot(1,T))
+Wi(x,y,z,T) = exp((1+T^2)*z-dψ⁴(x,y,T)/dψ⁴(x,y,Tn(x,y)))*sin((x-abs(y)*T)*hypot(1,T))
+Tn(x,y) = min(10π/abs(x),√(10π/abs(y)))
+dψ⁴(x,y,T) = (x*T-abs(y)*(2T^2+1))^4/(1+T^2)^2
 
 function source_elevation_plot(;Fn=1,kwargs...) # test function 
     ζ(x,y) = derivative(x->kelvin([x,y,0],[0,0,-1];Fn,kwargs...),x) # unit-point source
