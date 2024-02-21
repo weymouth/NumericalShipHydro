@@ -15,14 +15,43 @@ macro bind(def, element)
 end
 
 # ╔═╡ 83af53e0-cd99-11ee-2742-1d664ed611f4
-begin ## Get the NumericalShipHydro package before it's been registered!
+begin ## Get the NeumannKelvin package before it's been registered!
     import Pkg
-    Pkg.activate(joinpath(@__DIR__, ".."))
-	Pkg.add("PlutoUI")
-	Pkg.add("QuadGK")
-	using PlutoUI,QuadGK,Printf
-    using NumericalShipHydro
-    using NumericalShipHydro: quadgl_ab,quadgl_inf	
+    Pkg.activate(Base.current_project())
+	using Printf,StaticArrays
+end
+
+# ╔═╡ 58f96f50-045c-4549-90c5-5d594d7218f4
+begin
+	using SpecialFunctions
+	Ni(x,y,z,T) = real(expintx(complex((1+T^2)*z,eps(T)+(x+y*T)*hypot(1,T))))
+	Wi(x,y,z,T) = exp((1+T^2)*z)*sin(ψ(x,y,T))
+	ψ(x,y,T) = (x-abs(y)*T)*hypot(1,T)
+end;
+
+# ╔═╡ b4cde787-2d4c-4152-9972-38ce9945367b
+begin
+	function Wi(x,y,z,T,magic)
+		!magic && return Wi(x,y,z,T)
+		damp = dψ⁴(x,y,T)/dψ⁴(x,y,Tn(x,y))
+		exp((1+T^2)*z-damp)*sin(ψ(x,y,T))
+	end
+	Tn(x,y) = √(10π/abs(y))
+	dψ⁴(x,y,T) = (x*T-abs(y)*(2T^2+1))^4/(1+T^2)^2
+
+	using PlutoUI
+	check = @bind magic CheckBox(default=false)
+	md"""magical fix? $check"""
+end
+
+# ╔═╡ 2b2235df-4045-46d5-a099-1d68d52790d1
+begin
+	using NeumannKelvin: quadgl_ab,quadgl_inf
+	""" source(x,a) 
+	
+	Green function `G(x)` for a source at position `a`.
+	"""
+	source(x,a) = -1/hypot(x-a...)
 end
 
 # ╔═╡ ebe67ec1-6b3c-4656-9614-840d17d457f8
@@ -68,42 +97,27 @@ In the block above I've defined the integrands and used an adaptive Gaussian qua
 Take a look at the plot below and play with the `x,y,z` sliders to see why.
 """
 
-# ╔═╡ b4cde787-2d4c-4152-9972-38ce9945367b
-begin
-	magic = @bind damp CheckBox(default=false)
-	md"""magical fix? $magic"""
-end
-
 # ╔═╡ a27b8f0a-dc4a-452e-88ed-8fcc0b8a1a9a
 begin
 	xs = @bind x Slider(-5:0.5:2,default=-1,show_value=true)
-	ys = @bind y Slider([1/8,1/4,1/2,1,2,4],default=1/2,show_value=true)
+	ys = @bind y Slider([1/16,1/8,1/4,1/2,1,2,4],default=1/2,show_value=true)
 	zs = @bind z Slider([-1,-0.1,-0.01,-0.001],default=-0.1,show_value=true)
 	md"""x $xs,  y $ys,  z $zs"""
 end
 
-# ╔═╡ 58f96f50-045c-4549-90c5-5d594d7218f4
+# ╔═╡ 9beb01b8-b92c-4455-b73d-be17adc0e009
 begin
-	using SpecialFunctions
-	Ni(x,y,z,T) = real(expintx(complex((1+T^2)*z,eps(T)+(x+y*T)*hypot(1,T))))
-	Wi(x,y,z,T,damp=true) = exp(decay(x,y,z,T,damp))*sin(ψ(x,y,T))
-	Tn(x,y) = min(10π/abs(x),√(10π/abs(y)))
-	decay(x,y,z,T,damp=true) = (1+T^2)*z-ifelse(damp,dψ⁴(x,y,T)/dψ⁴(x,y,Tn(x,y)),0.)
-	ψ(x,y,T) = (x-abs(y)*T)*hypot(1,T)
-	dψ⁴(x,y,T) = (x*T-abs(y)*(2T^2+1))^4/(1+T^2)^2
+	using QuadGK
+	Wgk = quadgk_count(T->Wi(x,y,z,T,magic),x/abs(y),Inf)
+	Ngk = quadgk_count(T->Ni(x,y,z,T),-Inf,Inf)
 
 	using Printf: @sprintf
-	Wgk = quadgk_count(T->Wi(x,y,z,T,damp),x/abs(y),Inf)
-	Ngk = quadgk_count(T->Ni(x,y,z,T),-Inf,Inf)
 	sWgk=@sprintf "∫Wᵢ=%.3f, error≈%.1e, fevals=%i" Wgk...
 	sNgk=@sprintf "∫Nᵢ=%.3f, error≈%.1e, fevals=%i" Ngk...
-end;
+end
 
 # ╔═╡ 1b84b2ef-468c-4ddc-9a70-653294f74caf
 sWgk
-
-# ╔═╡ 1ded3510-5c3c-4d1e-92f4-3a7811c90308
-sNgk
 
 # ╔═╡ 6a32d7b0-b49f-4157-92f7-3d487196cf46
 begin
@@ -116,16 +130,16 @@ begin
 	using Plots
 	plot(range(min(-4,a),b,1000),T->Ni(x,y,z,T),label=sNgk,
 		color=:orange,xlabel="T",ylims=(-1.5,1.5))
-	damp &&	plot!(range(a,b,1000),T->Wi(x,y,z,T,false),
+	magic &&	plot!(range(a,b,1000),T->Wi(x,y,z,T,false),
 			label=nothing,color=:blue,alpha=0.2)
-	damp &&	Tn(x,y)<b && vline!([Tn(x,y)],label=nothing,alpha=0.5)
-	a>-b && scatter!([a],[Wi(x,y,z,a,damp)],c=:blue,label=nothing)
-	plot!(range(a,b,1000),T->Wi(x,y,z,T,damp),label=sWgk,color=:blue)
+	magic &&	Tn(x,y)<b && vline!([Tn(x,y)],label=nothing,alpha=0.5)
+	a>-b && scatter!([a],[Wi(x,y,z,a,magic)],c=:blue,label=nothing)
+	plot!(range(a,b,1000),T->Wi(x,y,z,T,magic),label=sWgk,color=:blue)
 end
 
 # ╔═╡ b5f9c1fc-ddc4-47d8-99dd-6f707bdd8fe7
 md"""
-The wave-like integrand becomes highly oscillatory when $z\rightarrow 0$. That's why the adaptive routine can require more than 150k(!) function evaluations to sample integrand completely.
+The wave-like integrand becomes highly oscillatory when $z\rightarrow 0$. That's why the adaptive routine can require up to 0.5M(!) function evaluations to sample integrand completely.
 
 This issue led to 100s of papers on special evaluation techniques for this integral, but I've already coded a "magical fix". When you add the magic, you will see:
  - The function decays **much** faster when $z\rightarrow 0$
@@ -162,7 +176,7 @@ is all we need.
 # ╔═╡ 219b0b75-2f1e-4c12-af88-b1f6b28e002d
 begin
 	gs = @bind n Slider([8,16,32,64,128],default=32,show_value=true)
-	md"""magic fix $magic,  Gauss points $gs
+	md"""magic fix $check,  Gauss points $gs
 	
 	x $xs,  y $ys,  z $zs"""
 end
@@ -181,12 +195,12 @@ begin
 	scatter!(plt1,xgl,T->S*inf(T->Ni(x,y,z,S*T-T₀),T),c=:orange,label=nothing)
 
 	# update limits
-	b1 = damp ? min(b,Tn(x,y)) : b; a1 = max(a,-b1)
+	b1 = magic ? min(b,Tn(x,y)) : b; a1 = max(a,-b1)
 	
 	h,j = (b1-a1)/2,(a1+b1)/2
-	plt2 = plot(range(-1,1,1000),T->h*Wi(x,y,z,h*T+j,damp),ylabel="Wᵢ",
+	plt2 = plot(range(-1,1,1000),T->h*Wi(x,y,z,h*T+j,magic),ylabel="Wᵢ",
 		c=:blue,label=nothing)
-	scatter!(plt2,xgl,T->h*Wi(x,y,z,h*T+j,damp),c=:blue,label=nothing)
+	scatter!(plt2,xgl,T->h*Wi(x,y,z,h*T+j,magic),c=:blue,label=nothing)
 	plot(plt1,plt2,layout=(2,1))
 end
 
@@ -195,7 +209,7 @@ begin
 	np = 2 .^(1:9)
 	Wp = map(np) do n
 		xgl, wgl = gausslegendre(n)
-		quadgl_ab(T->Wi(x,y,z,T,damp),a1,b1;xgl,wgl)
+		quadgl_ab(T->Wi(x,y,z,T,magic),a1,b1;xgl,wgl)
 	end
 	Np = map(np) do n
 		xgl, wgl = gausslegendre(n)
@@ -223,13 +237,6 @@ For most values of `x,y,z` 16-32 Gauss points is enough to integrate the functio
 Now that we can compute the integrals, we can write the free-surface Green function.
 """
 
-# ╔═╡ 2b2235df-4045-46d5-a099-1d68d52790d1
-""" source(x,a) 
-
-Green function `G(x)` for a source at position `a`.
-"""
-source(x,a) = -1/hypot(x-a...)
-
 # ╔═╡ c9971990-866c-4623-a99f-1719191df4db
 """
     kelvin(ξ,a;Fn=1,kwargs...)
@@ -245,8 +252,8 @@ function kelvin(ξ,α;Fn=1,ltol=-3log(10),xgl=xgl,wgl=wgl)
     x,y,z = (ξ-α .* SA[1,1,-1])/Fn^2
 
     # Wave-like far-field disturbance
-	b = √max(ltol/z-1,0); damp && (b=min(Tn(x,y),b)); a = max(x/abs(y),-b)
-    W = ifelse(a≥b || x==y==0, 0., 4*quadgl_ab(T->Wi(x,y,z,T,damp),a,b;xgl,wgl))
+	b = √max(ltol/z-1,0); magic && (b=min(Tn(x,y),b)); a = max(x/abs(y),-b)
+    W = ifelse(a≥b || x==y==0, 0., 4*quadgl_ab(T->Wi(x,y,z,T,magic),a,b;xgl,wgl))
 
     # Near-field disturbance
     T₀ = ifelse(y==0,0,clamp(x/y,-b,b)); S = max(abs(T₀),π) # center & scale
@@ -261,7 +268,7 @@ begin
 	Fns = @bind Fn Slider(0.4:0.2:2,default=1,show_value=true)
 	md"""Fn $Fns,  Gauss points $gs
 	
-	magic fix $magic,  z $zs"""
+	magic fix $check,  z $zs"""
 end
 
 # ╔═╡ beff6b0c-0ba9-4165-b425-fa9f14a7cfeb
@@ -278,8 +285,8 @@ contour(xg,yg,zg,clims=(-3,1.5))
 # ╟─83af53e0-cd99-11ee-2742-1d664ed611f4
 # ╟─ebe67ec1-6b3c-4656-9614-840d17d457f8
 # ╠═58f96f50-045c-4549-90c5-5d594d7218f4
+# ╠═9beb01b8-b92c-4455-b73d-be17adc0e009
 # ╟─1b84b2ef-468c-4ddc-9a70-653294f74caf
-# ╟─1ded3510-5c3c-4d1e-92f4-3a7811c90308
 # ╟─f4588bb2-8605-42b7-b149-7f9f33044f6b
 # ╟─6a32d7b0-b49f-4157-92f7-3d487196cf46
 # ╟─b4cde787-2d4c-4152-9972-38ce9945367b
