@@ -1,56 +1,62 @@
 ### A Pluto.jl notebook ###
-# v0.19.39
+# v0.19.38
 
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ 8450fddd-df98-4ab6-acce-6d3720c1098b
 begin
+	using PlutoUI
 	f(x) = exp(-x^2)
 	g(x) = sqrt(1+x^2)
+	@bind ω Slider(2 .^(1:8) ,default=16,show_value=true)
 end
+
+# ╔═╡ 5769b112-2b5c-4451-8917-80c7928c35b9
+using Printf
 
 # ╔═╡ a062464d-b0c8-4799-b424-ab43af2bda80
 begin
-	using Plots
-	using QuadGK
-	ω=30
 	Wx(x;ω=ω) = imag(f(x)*exp(im*ω*g(x)))
-	plot(range(-4,4,1000),Wx,title=quadgk_count(Wx,-Inf,Inf)[1:2:3],label=nothing)
-end
 
-# ╔═╡ a88eccc6-895a-4b1f-8a41-b5e7364455d4
-begin
-	using ForwardDiff: derivative
-	# stationary point dg(x₀)=0
-	x₀=0 # hard coded
-	# g(h(p)) = g(x₀)+ip²
-	h(p) = sign(p)*sqrt((g(x₀)+im*p^2)^2-1) # hard coded
-	# dg(h(p))dh(p) = 2ip => dh(p) = 2ip/dg(h(p))
-	# l'Hopital => dh₀ = 2i/ddg(h₀)dh₀ = √(2i/ddg(h₀))
-	# dg(x) = derivative(g,x); d2g(x) = derivative(dg,x)
-	# dh₀ = √(2im/d2g(x₀))
-	# h(p) = x₀+dh₀*p # Taylor approximation for h
-end
+	using QuadGK
+	Wgk,_,ngk = quadgk_count(Wx,-Inf,Inf)
+
+	using Printf: @sprintf
+	sWgk=@sprintf "∫Wᵢ=%.8f, fevals=%i" Wgk ngk
+
+	using Plots
+	plt1 = plot(range(-3,3,2000),Wx,title=sWgk,label=nothing)
+end;
 
 # ╔═╡ 2e13ec68-157b-457a-a1ce-b0240554b8c8
 begin
+	using ForwardDiff: derivative
+	x₀=0
+	h(p) = sign(p)*sqrt((g(x₀)+im*p^2)^2-1)
+	Wp(p;ω=ω) = imag(f(h(p))*exp(im*ω*g(h(p)))*derivative(h,p))
+
 	using FastGaussQuadrature
 	xgh,wgh = gausshermite(4) ##  4 Gauss points!
-	quadgh(fp;ω=ω) = imag(exp(im*ω*g(x₀))/√ω*(wgh'*fp.(xgh/√ω)))
-	Wp(p;ω=ω) = imag(f(h(p))*exp(im*ω*g(h(p)))*derivative(h,p))
-	plot(range(-4,4,1000),Wp,label=nothing,
-		title=(quadgh(p->f(h(p))*derivative(h,p)),4))
-end
+	fp(p) = f(h(p))*derivative(h,p)
+	Wgh = imag(exp(im*ω*g(x₀))/√ω*(wgh'*fp.(xgh/√ω)))
 
-# ╔═╡ 6d9aaee6-bdee-4151-8737-17d586a53939
-begin
-	plt1=plot(range(-1,1,100),p->real(g(h(p))),ylims=(0,2))
-	plot!(range(-1,1,100),p->g(x₀))
-	plt2=plot(range(-1,1,100),p->imag(g(h(p))))
-	plot!(range(-1,1,100),abs2)
-	plot(plt1,plt2)
-end
+	sWgh=@sprintf "∫Wᵢ=%.8f, fevals=%i" Wgh 4
+	plt2=plot(range(-2,2,1000),Wp,label=nothing,title=sWgh,xlims=(-3,3))
+end;
+
+# ╔═╡ cac1ca10-cc3b-448b-a258-8e45450d6d78
+plot(plt1,plt2,layout=(2,1))
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -58,12 +64,15 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 
 [compat]
 FastGaussQuadrature = "~1.0.2"
 ForwardDiff = "~0.10.36"
 Plots = "~1.40.1"
+PlutoUI = "~0.7.57"
 QuadGK = "~2.9.4"
 """
 
@@ -73,7 +82,13 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "aaab4dea6ead01f559490b89245c4d0f4d91934f"
+project_hash = "13b2c054b6a48c29439460ee3a3cf16a9d6d6f35"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "c278dfab760520b8bb7e9511b968bf4ba38b7acc"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.2.3"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -344,6 +359,24 @@ git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
 
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.5"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.5"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "8b72179abc660bfab5e28472e019392b97d0985c"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.4"
+
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -524,6 +557,11 @@ git-tree-sha1 = "c1dd6d7978c12545b4179fb6153b9250c96b0075"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.0.3"
 
+[[deps.MIMEs]]
+git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "0.1.4"
+
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
 git-tree-sha1 = "2fa9ee3e63fd3a4f7a9a4f4744a52f4856de82df"
@@ -677,6 +715,12 @@ version = "1.40.1"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "a6783c887ca59ce7e97ed630b74ca1f10aefb74d"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.57"
+
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
 git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
@@ -794,9 +838,9 @@ version = "2.3.1"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
-git-tree-sha1 = "bf074c045d3d5ffd956fa0a461da38a44685d6b2"
+git-tree-sha1 = "7b0e9c14c624e435076d19aea1e5cbdec2b9ca37"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.9.3"
+version = "1.9.2"
 
     [deps.StaticArrays.extensions]
     StaticArraysChainRulesCoreExt = "ChainRulesCore"
@@ -861,6 +905,11 @@ weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
     TestExt = ["Test", "Random"]
+
+[[deps.Tricks]]
+git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.8"
 
 [[deps.URIs]]
 git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
@@ -1198,9 +1247,9 @@ version = "1.4.1+1"
 
 # ╔═╡ Cell order:
 # ╠═8450fddd-df98-4ab6-acce-6d3720c1098b
+# ╟─cac1ca10-cc3b-448b-a258-8e45450d6d78
 # ╠═a062464d-b0c8-4799-b424-ab43af2bda80
-# ╠═a88eccc6-895a-4b1f-8a41-b5e7364455d4
 # ╠═2e13ec68-157b-457a-a1ce-b0240554b8c8
-# ╠═6d9aaee6-bdee-4151-8737-17d586a53939
+# ╟─5769b112-2b5c-4451-8917-80c7928c35b9
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
