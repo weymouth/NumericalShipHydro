@@ -17,7 +17,7 @@ end
 # ╔═╡ 8450fddd-df98-4ab6-acce-6d3720c1098b
 begin
 	f(x) = exp(-x^2)
-	b = 0.25
+	b = 0.2
 	g(x) = (1+b*x)*sqrt(1+x^2)
 
 	using PlutoUI
@@ -39,41 +39,72 @@ begin
 	# end point: g(xₗ) = 0
 	xₗ=-1/b
 	# stationary points: dg(x₀)=0
-	x₀= @. (-1+[1,-1]√(1-8b^2))/4b
+	x₀= 8b^2>1 ? [] : @. (-1+[1,-1]√(1-8b^2))/4b
 
 	# Build quadratic approximation for h (since g isn't invertible)
 	dg(x) = derivative(g,x); d2g(x) = derivative(dg,x)
 	d3g(x) = derivative(d2g,x); d4g(x) = derivative(d3g,x)
 	# end point: g(hₗ(p)) = g(xₗ)+im*p
-	hₗ(p,xₗ) = xₗ+p*im/dg(xₗ)+p^2/2*d2g(xₗ)/dg(xₗ)^3
+	hₗ(p,x) = x+p*im/dg(x)+p^2/2*d2g(x)/dg(x)^3
 	# stationary points: g(h₀(p)) = g(x₀)+im*p^2
-	h₀(p,x₀) = x₀+p*√(2im/d2g(x₀))-p^2*im/3*d3g(x₀)/d2g(x₀)^2	
+	h₀(p,x) = x+p*√(2im/d2g(x))-p^2*im/3*d3g(x)/d2g(x)^2	
 end;
 
-# ╔═╡ 2e13ec68-157b-457a-a1ce-b0240554b8c8
+# ╔═╡ 3d76c942-43cc-49d6-aad5-daade3993090
+function wirtinger(f,z)
+	x,y = reim(z)
+	∂x = derivative(x->f(x+im*y),x)
+	∂y = derivative(y->f(x+im*y),y)
+	0.5(∂x-im*∂y)
+end
+
+# ╔═╡ d99f087f-9607-4ecf-9ec3-1d850551b77e
+function NewtonRaphson(f, x, tol=1e-3)
+	fx =  f(x)
+	fp(x) = wirtinger(f,x)
+    while abs(fx) > tol
+        x -= fx/fp(x)
+        fx = f(x)
+    end; x
+end
+
+# ╔═╡ 447745ba-6291-4258-a7a1-64209c094348
 begin
 	using FastGaussQuadrature
 	xgL,wgL = gausslaguerre(2)
 	xgH,wgH = gausshermite(4)
-end;
+
+	hGₗ = [NewtonRaphson(h->g(h)-g(xₗ)-im*p,hₗ(p,xₗ)) for p in xgL/ω]
+	W = imag(exp(im*ω*g(xₗ))/ω*wgL'* @. f(hGₗ)*im/wirtinger(g,hGₗ))
+	
+	for x in x₀
+		hG₀ = [NewtonRaphson(h->g(h)-g(x)-im*p^2,h₀(p,x)) for p in xgH/√ω]
+		dW = exp(im*ω*g(x))/√ω*wgH'* @. f(hG₀)*√(2im/wirtinger(h->wirtinger(g,h),hG₀))
+		global W += imag(dW)
+	end; W
+end
+
+# ╔═╡ 7f5bc252-f277-45fe-ace9-d6a0d23d85aa
+find_h(p,x,g,h;r=2) = NewtonRaphson(h->g(h)-g(x)-im*p^r,h(p,x))
 
 # ╔═╡ d008b38c-fc4e-4a48-a077-5614e4668cac
 # check for stationary phases
-function checkpath(x,h,g,pGauss)
+function checkpath(x,h,g,pGauss;r=2)
 	p = range(1.2minimum(pGauss),1.2maximum(pGauss),100)
 	hp = h.(p,x); ghp = g.(hp)
+	hG = find_h.(pGauss,x,g,h;r)
 	ymn,ymx = extrema(imag.(ghp)); span = ymx-ymn
 	xlims = @. g(x) + 0.5span*(-1,1)
 	plt1 = plot(reim.(hp),xlabel="Re(x)",ylabel="Im(x)",label="path")
-	scatter!(reim.(h.(pGauss,x)),label="samples")
+	scatter!(reim.(hG),label="samples")
 	plt2 = plot(reim.(ghp),xlabel="Re(g)",ylabel="Im(g)",label="g(h)";xlims)
-	scatter!(reim.(g.(h.(pGauss,x))),label=nothing)
+	scatter!(reim.(g.(hG)),label=nothing)
 	vline!(plt2,[g(x)],label="goal",ls=:dash)
 	plot(plt1,plt2,size=(600,300))
 end;
 
-# ╔═╡ 4b338dff-bdf9-425e-9fae-15849041321e
-checkpath(xₗ,hₗ,g,xgL/ω)
+# ╔═╡ a04b1bf6-e06d-47ad-a386-5bddc7ae5490
+checkpath(xₗ,hₗ,g,xgL/ω,r=1)
 
 # ╔═╡ 5ac06efb-8b08-49b1-a7bf-d18c6faf5114
 checkpath(x₀[1],h₀,g,xgH/√ω)
@@ -94,7 +125,7 @@ QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 FastGaussQuadrature = "~1.0.2"
 ForwardDiff = "~0.10.36"
 Plots = "~1.40.1"
-PlutoUI = "~0.7.58"
+PlutoUI = "~0.7.57"
 QuadGK = "~2.9.4"
 """
 
@@ -104,7 +135,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "2f65d25905979c5eaab811b409c8ad2d0d129b9a"
+project_hash = "e0a5d9e418de630f7c046b2b302f15a492f76582"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -739,9 +770,9 @@ version = "1.40.1"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
-git-tree-sha1 = "71a22244e352aa8c5f0f2adde4150f62368a3f2e"
+git-tree-sha1 = "a6783c887ca59ce7e97ed630b74ca1f10aefb74d"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.58"
+version = "0.7.57"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -1271,10 +1302,13 @@ version = "1.4.1+1"
 # ╠═8450fddd-df98-4ab6-acce-6d3720c1098b
 # ╠═a062464d-b0c8-4799-b424-ab43af2bda80
 # ╠═a88eccc6-895a-4b1f-8a41-b5e7364455d4
-# ╠═2e13ec68-157b-457a-a1ce-b0240554b8c8
-# ╠═4b338dff-bdf9-425e-9fae-15849041321e
-# ╠═5ac06efb-8b08-49b1-a7bf-d18c6faf5114
-# ╠═2119785d-ac77-4db9-9708-27a82a8fcdc9
-# ╠═d008b38c-fc4e-4a48-a077-5614e4668cac
+# ╠═447745ba-6291-4258-a7a1-64209c094348
+# ╟─a04b1bf6-e06d-47ad-a386-5bddc7ae5490
+# ╟─5ac06efb-8b08-49b1-a7bf-d18c6faf5114
+# ╟─2119785d-ac77-4db9-9708-27a82a8fcdc9
+# ╟─d008b38c-fc4e-4a48-a077-5614e4668cac
+# ╠═7f5bc252-f277-45fe-ace9-d6a0d23d85aa
+# ╠═d99f087f-9607-4ecf-9ec3-1d850551b77e
+# ╠═3d76c942-43cc-49d6-aad5-daade3993090
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
