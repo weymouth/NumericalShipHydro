@@ -17,7 +17,7 @@ end
 # ╔═╡ 8450fddd-df98-4ab6-acce-6d3720c1098b
 begin
 	f(x) = exp(-x^2)
-	b = 0.2
+	b = 1/4
 	g(x) = (1+b*x)*sqrt(1+x^2)
 
 	using PlutoUI
@@ -29,44 +29,47 @@ begin
 	using Plots
 	using QuadGK
 	Wx(x) = imag(f(x)*exp(im*ω*g(x)))
-	plot(range(-1/b,4,1000),Wx,title=quadgk_count(Wx,-1/b,Inf)[1:2:3],label=nothing)
+	plot(range(max(-4,-1/b),4,2000),Wx,title=quadgk_count(Wx,-1/b,Inf)[1:2:3],label=nothing)
 end
 
 # ╔═╡ a88eccc6-895a-4b1f-8a41-b5e7364455d4
 begin
-	using ForwardDiff: derivative
-	# Hand code roots since they are easy for this g
-	# end point: g(xₗ) = 0
-	xₗ=-1/b
-	# stationary points: dg(x₀)=0
-	x₀= 8b^2>1 ? [] : @. (-1+[1,-1]√(1-8b^2))/4b
+	# Critical points
+	if b≠0
+		# end point: g(xₗ) = 0
+		xₗ= [-1/b]
+		# stationary points: dg(x₀)=0
+		x₀= 8b^2>1 ? [] : @. (-1+[1,-1]√(1-8b^2))/4b
+	else
+		xₗ = []; x₀ = [0]
+	end
 
-	# Build quadratic approximation for h (since g isn't invertible)
+	# Derivatives of g
+	using ForwardDiff
+	using ForwardDiff: derivative
+	function ForwardDiff.derivative(f,z::Complex)
+		x,y = reim(z)
+		∂x = derivative(x->f(x+im*y),x)
+		∂y = derivative(y->f(x+im*y),y)
+		0.5(∂x-im*∂y)
+	end
 	dg(x) = derivative(g,x); d2g(x) = derivative(dg,x)
-	d3g(x) = derivative(d2g,x); d4g(x) = derivative(d3g,x)
+
+	# Linear approximations for h
 	# end point: g(hₗ(p)) = g(xₗ)+im*p
-	hₗ(p,x) = x+p*im/dg(x)+p^2/2*d2g(x)/dg(x)^3
+	hₗ(p,x) = x+p*im/dg(x)
 	# stationary points: g(h₀(p)) = g(x₀)+im*p^2
-	h₀(p,x) = x+p*√(2im/d2g(x))-p^2*im/3*d3g(x)/d2g(x)^2	
+	h₀(p,x) = x+p*√(2im/d2g(x))
 end;
 
-# ╔═╡ 3d76c942-43cc-49d6-aad5-daade3993090
-function wirtinger(f,z)
-	x,y = reim(z)
-	∂x = derivative(x->f(x+im*y),x)
-	∂y = derivative(y->f(x+im*y),y)
-	0.5(∂x-im*∂y)
-end
-
 # ╔═╡ d99f087f-9607-4ecf-9ec3-1d850551b77e
-function NewtonRaphson(f, x, tol=1e-3)
+function NewtonRaphson(f, x, tol=1e-8)
 	fx =  f(x)
-	fp(x) = wirtinger(f,x)
-    while abs(fx) > tol
-        x -= fx/fp(x)
+    while abs2(fx) > tol
+        x -= fx/derivative(f,x)
         fx = f(x)
     end; x
-end
+end;
 
 # ╔═╡ 447745ba-6291-4258-a7a1-64209c094348
 begin
@@ -74,25 +77,24 @@ begin
 	xgL,wgL = gausslaguerre(2)
 	xgH,wgH = gausshermite(4)
 
-	hGₗ = [NewtonRaphson(h->g(h)-g(xₗ)-im*p,hₗ(p,xₗ)) for p in xgL/ω]
-	W = imag(exp(im*ω*g(xₗ))/ω*wgL'* @. f(hGₗ)*im/wirtinger(g,hGₗ))
-	
+	W = 0.
+	for x in xₗ
+		local hGₗ = [NewtonRaphson(h->g(h)-g(x)-im*p,hₗ(p,x)) for p in xgL/ω]
+		global W = imag(im*exp(im*ω*g(x))/ω*(wgL'* @. f(hGₗ)/dg(hGₗ)))
+	end	
 	for x in x₀
-		hG₀ = [NewtonRaphson(h->g(h)-g(x)-im*p^2,h₀(p,x)) for p in xgH/√ω]
-		dW = exp(im*ω*g(x))/√ω*wgH'* @. f(hG₀)*√(2im/wirtinger(h->wirtinger(g,h),hG₀))
-		global W += imag(dW)
-	end; W
+		local hG₀ = [NewtonRaphson(h->g(h)-g(x)-im*p^2,h₀(p,x)) for p in xgH/√ω]
+		global W += imag(2im*exp(im*ω*g(x))/ω*(wgH'* @. f(hG₀)*xgH/dg(hG₀)))
+	end
+	W
 end
-
-# ╔═╡ 7f5bc252-f277-45fe-ace9-d6a0d23d85aa
-find_h(p,x,g,h;r=2) = NewtonRaphson(h->g(h)-g(x)-im*p^r,h(p,x))
 
 # ╔═╡ d008b38c-fc4e-4a48-a077-5614e4668cac
 # check for stationary phases
 function checkpath(x,h,g,pGauss;r=2)
 	p = range(1.2minimum(pGauss),1.2maximum(pGauss),100)
 	hp = h.(p,x); ghp = g.(hp)
-	hG = find_h.(pGauss,x,g,h;r)
+	hG = [NewtonRaphson(h->g(h)-g(x)-im*p^r,h(p,x)) for p in pGauss]
 	ymn,ymx = extrema(imag.(ghp)); span = ymx-ymn
 	xlims = @. g(x) + 0.5span*(-1,1)
 	plt1 = plot(reim.(hp),xlabel="Re(x)",ylabel="Im(x)",label="path")
@@ -104,13 +106,10 @@ function checkpath(x,h,g,pGauss;r=2)
 end;
 
 # ╔═╡ a04b1bf6-e06d-47ad-a386-5bddc7ae5490
-checkpath(xₗ,hₗ,g,xgL/ω,r=1)
-
-# ╔═╡ 5ac06efb-8b08-49b1-a7bf-d18c6faf5114
-checkpath(x₀[1],h₀,g,xgH/√ω)
+[checkpath(x,hₗ,g,xgL/ω,r=1) for x in xₗ]
 
 # ╔═╡ 2119785d-ac77-4db9-9708-27a82a8fcdc9
-checkpath(x₀[2],h₀,g,xgH/√ω)
+[checkpath(x,h₀,g,xgH/√ω) for x in x₀]
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1300,15 +1299,12 @@ version = "1.4.1+1"
 
 # ╔═╡ Cell order:
 # ╠═8450fddd-df98-4ab6-acce-6d3720c1098b
-# ╠═a062464d-b0c8-4799-b424-ab43af2bda80
-# ╠═a88eccc6-895a-4b1f-8a41-b5e7364455d4
+# ╟─a062464d-b0c8-4799-b424-ab43af2bda80
+# ╟─a88eccc6-895a-4b1f-8a41-b5e7364455d4
+# ╟─d99f087f-9607-4ecf-9ec3-1d850551b77e
 # ╠═447745ba-6291-4258-a7a1-64209c094348
 # ╟─a04b1bf6-e06d-47ad-a386-5bddc7ae5490
-# ╟─5ac06efb-8b08-49b1-a7bf-d18c6faf5114
 # ╟─2119785d-ac77-4db9-9708-27a82a8fcdc9
 # ╟─d008b38c-fc4e-4a48-a077-5614e4668cac
-# ╠═7f5bc252-f277-45fe-ace9-d6a0d23d85aa
-# ╠═d99f087f-9607-4ecf-9ec3-1d850551b77e
-# ╠═3d76c942-43cc-49d6-aad5-daade3993090
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
