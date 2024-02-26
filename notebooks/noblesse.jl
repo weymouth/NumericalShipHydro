@@ -1,12 +1,12 @@
 ### A Pluto.jl notebook ###
-# v0.19.39
+# v0.19.38
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ bc40cdd0-d3e1-11ee-03bd-85a796d31c2b
 begin
-	using Plots,SpecialFunctions, QuadGK, FastGaussQuadrature
+	using Plots,SpecialFunctions, QuadGK, FastGaussQuadrature,TypedTables
 	using Base.MathConstants: γ
 	ngl=32
 	xgl,wgl = gausslegendre(ngl)
@@ -24,48 +24,74 @@ begin
 		∂y = derivative(y->f(x+im*y),y)
 		0.5(∂x-im*∂y)
 	end
-	function NewtonRaphson(f, x, tol=1e-8)
+	function NewtonRaphson(f, x, tol=1e-8, itr=0, itmax=20)
 		fx =  f(x)
-	    while abs2(fx) > tol
-	        x -= fx/derivative(f,x)
+	    while abs2(fx) > tol && itr>itmax
+	        dx = fx/derivative(f,x)
+			x -= dx/(1+abs(dx))
+			itr+=1
 	        fx = f(x)
 	    end; x
 	end
 end;
 
+# ╔═╡ 259d0736-9646-49cb-9203-cb10009f353c
+function NSD(x₀,f,g)
+	dg(x) = derivative(g,x); d2g(x) = derivative(dg,x); d3g(x) = derivative(d2g,x)
+	mapreduce(vcat,x₀) do x
+		dh = [Inf,sqrt(2im/d2g(x)),(6im/d3g(x))^(1/3)]
+		r = argmin(i->abs2(dh[i]),1:3)
+		y = imag(dh[3])
+		map(zip(wgH,xgH)) do (w,p)
+			θ,ρ = angle(p*dh[2]),abs(p*dh[r])
+			h₀ = (r==2 || θ*y>0 || imag(x)*y>0 ) ? x+ρ*exp(im*θ) : x+ρ*im
+			h = h₀
+			# h = NewtonRaphson(h->g(h)-g(x)-im*p^2,h₀)
+			fh = imag(2im*exp(im*g(x))*w*f(h)*p/dg(h))
+			(h=h,fh=fh)
+		end
+	end |> Table
+	# W = 0.
+	# for x in x₀
+	# 	hG = [NewtonRaphson(h->g(h)-g(x)-im*p^2,h(p,x)) for p in xgH]
+	# 	W += imag(2im*exp(im*g(x))*(wgH'* @. f(hG)*xgH/dg(hG)))
+	# end; W
+end
+
 # ╔═╡ 53153e7d-b6bd-4af8-914a-9d761ce8fa9a
 function stat_points(x,y,b)
 	y==0 && return [0]
 	diff = x^2-8y^2
-	diff≤0 && return []
+	diff≤0 && return [(-x+im*√-diff)/4y]
 	return filter(x->abs(x)<b, @. (-x+[-1,1]*√diff)/4y)
-end
-
-# ╔═╡ 259d0736-9646-49cb-9203-cb10009f353c
-function NSD(x₀,f,g)
-	dg(x) = derivative(g,x); d2g(x) = derivative(dg,x)
-	h(p,x) = x+p*√(2im/d2g(x))
-	W = 0.
-	for x in x₀
-		hG = [NewtonRaphson(h->g(h)-g(x)-im*p^2,h(p,x)) for p in xgH]
-		W += imag(2im*exp(im*g(x))*(wgH'* @. f(hG)*xgH/dg(hG)))
-	end; W
 end
 
 # ╔═╡ 7789b05c-b15a-4db4-82dc-4163f63ca2c8
 function Nob1bplt(x,y,z)
-	ζ(t) = (z*sqrt(1-t^2)+y*t+im*abs(x))*sqrt(1-t^2)
-	Ni(t) = imag(expintx(ζ(t))+log(ζ(t))+γ)
-	f(t) = Ni(t)*√(1-t^2)
-	# plot(range(-1,1,1000),Ni,label=quadgk(Ni,-1,1)[1])
-	# scatter!(xgc,Ni,label=wgc'*f.(xgc))
-	Wi(t) = exp(z*(1+t^2))*sin((x+y*t)*hypot(1,t))
+	# Wi(t) = exp(z*(1+t^2))*sin((x+y*t)*hypot(1,t))
+	# b = √(-3log(10)/z)
+	# plot(range(-b,b,1000),Wi,label=4quadgk(Wi,-b,b)[1])
+	# scatter!(xgl*b,Wi,label=4b*(wgl'*Wi.(b*xgl)))
+	# T₀ = stat_points(x,y,b)
+	# W = NSD(T₀,t->exp(z*(1+t^2)),t->(x+y*t)*sqrt(1+t^2))
+	# scatter!(T₀,Wi,label=4W)
+
 	b = √(-3log(10)/z)
-	plot(range(-b,b,1000),Wi,label=4quadgk(Wi,-b,b)[1])
-	scatter!(xgl*b,Wi,label=4b*(wgl'*Wi.(b*xgl)))
 	T₀ = stat_points(x,y,b)
-	W = NSD(T₀,t->exp(z*(1+t^2)),t->(x+y*t)*sqrt(1+t^2))
-	scatter!(T₀,Wi,label=4W)
+	scatter(reim.(T₀),label="t₀",xlabel="Re(t)",ylabel="Im(t)",
+		ylims = (-2,2), xlims = (-5,5))
+	g(t) = (x+y*t)*sqrt(1+t^2)
+	hG = NSD(T₀,t->exp(z*(1+t^2)),g)
+	scatter!(reim.(hG.h),marker_z=hG.fh,label="Gauss points",
+			alpha=0.5,clims=(-0.5,0.5))
+end
+
+# ╔═╡ 07932f01-9ab8-4683-af27-3d1e750afd00
+begin
+	x,y,z=-10,1,-0.01
+	y = -(x/√8+1/4)
+	# Nob1(x,y,z),Nob2(x,y,z),Nob3(x,y,z),Nob1b(x,y,z)
+	Nob1bplt(x,y,z)
 end
 
 # ╔═╡ 19a71863-bd5a-48ef-915c-585d9a9c0572
@@ -102,36 +128,14 @@ function Nob2(x,y,z)
 	r = hypot(x,y,z)
 	Ni(t) = imag(expintx((x-z*t+im*y*hypot(1,t))*t+im*eps()))
 	f(t) = Ni(t)*t/hypot(1,t)
-	g(t) = f(t/(1-t^2))*(1+t^2)/(1-t^2)^2
-	I,n = wgl'*g.(xgl),ngl
+	I,_,n = quadgk_count(f,-Inf,Inf)
 	N = 1/r+2I/π
 	Wia(t) = exp(z*(1+t^2))*sin((x+abs(y)*t)*hypot(1,t))
 	Wib(t) = exp(z*(1-t^2)-abs(y)*t*sqrt(1-t^2))*cos(x*sqrt(1-t^2))
 	J,_,m = quadgk_count(Wia,0,Inf)
-	i = ngl÷2+1:ngl
-	K,o = wgl[i]'*Wib.(xgl[i]),length(i)
+	K,_,o = quadgk_count(Wib,0,1)
 	W = 4J-4K
 	return N+W,n,m,o
-end
-
-# ╔═╡ b55db0cb-b225-4de6-80db-d8192e1f6ce8
-function Nob2plt(x,y,z)
-	# Ni(t) = imag(expintx((x-z*t+im*y*hypot(1,t))*t+im*eps()))
-	# f(t) = Ni(t)*t/hypot(1,t)
-	# g(t) = f(t/(1-t^2))*(1+t^2)/(1-t^2)^2
-	# N = quadgk(g,-1,1)[1]
-	# plt1=plot(range(-1,1,1000),g,label=N)
-	# scatter!(xgl,g,label=wgl'*g.(xgl))
-	# Wia(t) = exp(z*(1+t^2))*sin((x+abs(y)*t)*hypot(1,t))
-	# Wib(t) = exp(z*(1-t^2)-abs(y)*t*sqrt(1-t^2))*cos(x*sqrt(1-t^2))
-	# K,_,o = quadgk_count(Wib,0,1)
-	# plot(range(0,1,1000),Wib,label=K)
-	# i = ngl÷2+1:ngl
-	# scatter!(xgl[i],Wib,label=wgl[i]'*Wib.(xgl[i]))
-	Wia(t) = exp(z*(1+t^2))*sin((x+abs(y)*t)*hypot(1,t))
-	J,_,m = quadgk_count(Wia,0,Inf)
-	b = √(-3log(10)/z)
-	plot(range(0,b,1000),Wia)
 end
 
 # ╔═╡ 80534c1f-e973-4596-a5a7-734aa523e69c
@@ -146,13 +150,6 @@ function Nob3(x,y,z)
 	return N+W,n,m
 end
 
-# ╔═╡ 07932f01-9ab8-4683-af27-3d1e750afd00
-begin
-	x,y,z=-10,1,-0.01
-	Nob1(x,y,z),Nob1b(x,y,z),Nob2(x,y,z),Nob3(x,y,z)
-	# Nob1bplt(x,y,z)
-end
-
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -161,6 +158,7 @@ ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
 
 [compat]
 FastGaussQuadrature = "~1.0.2"
@@ -168,6 +166,7 @@ ForwardDiff = "~0.10.36"
 Plots = "~1.40.1"
 QuadGK = "~2.9.4"
 SpecialFunctions = "~2.3.1"
+TypedTables = "~1.4.6"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -176,7 +175,17 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "eda216c439a6b7de3ffcadf9f127f3d2ad551627"
+project_hash = "8a3986eda788859d5b85cd95b38e3768787e3ee0"
+
+[[deps.Adapt]]
+deps = ["LinearAlgebra", "Requires"]
+git-tree-sha1 = "0fb305e0253fd4e833d486914367a2ee2c2e78d0"
+uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+version = "4.0.1"
+weakdeps = ["StaticArrays"]
+
+    [deps.Adapt.extensions]
+    AdaptStaticArraysExt = "StaticArrays"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -282,6 +291,11 @@ git-tree-sha1 = "1fb174f0d48fe7d142e1109a10636bc1d14f5ac2"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 version = "0.18.17"
 
+[[deps.DataValueInterfaces]]
+git-tree-sha1 = "bfc1187b79289637fa0ef6d4436ebdfe6905cbd6"
+uuid = "e2d170a0-9d28-54be-80f0-106bbe20a464"
+version = "1.0.0"
+
 [[deps.Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -291,6 +305,12 @@ deps = ["Mmap"]
 git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 version = "1.9.1"
+
+[[deps.Dictionaries]]
+deps = ["Indexing", "Random", "Serialization"]
+git-tree-sha1 = "573c92ef22ee0783bfaa4007c732b044c791bc6d"
+uuid = "85a47980-9c8c-11e8-2b9f-f7ca1fa99fb4"
+version = "0.4.1"
 
 [[deps.DiffResults]]
 deps = ["StaticArraysCore"]
@@ -447,6 +467,11 @@ git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
 
+[[deps.Indexing]]
+git-tree-sha1 = "ce1566720fd6b19ff3411404d4b977acd4814f9f"
+uuid = "313cdc1a-70c2-5d6a-ae34-0150d3930a38"
+version = "1.1.1"
+
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -455,6 +480,11 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
+
+[[deps.IteratorInterfaceExtensions]]
+git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
+uuid = "82899510-4779-5014-852e-03e436cf321d"
+version = "1.0.0"
 
 [[deps.JLFzf]]
 deps = ["Pipe", "REPL", "Random", "fzf_jll"]
@@ -476,9 +506,9 @@ version = "0.21.4"
 
 [[deps.JpegTurbo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "3336abae9a713d2210bb57ab484b1e065edd7d23"
+git-tree-sha1 = "60b1194df0a3298f460063de985eae7b01bc011a"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
-version = "3.0.2+0"
+version = "3.0.1+0"
 
 [[deps.LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -895,6 +925,12 @@ version = "2.3.1"
     [deps.SpecialFunctions.weakdeps]
     ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 
+[[deps.SplitApplyCombine]]
+deps = ["Dictionaries", "Indexing"]
+git-tree-sha1 = "c06d695d51cfb2187e6848e98d6252df9101c588"
+uuid = "03a91e81-4c3e-53e1-a0a4-9c0c8f19dd66"
+version = "1.2.3"
+
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
 git-tree-sha1 = "bf074c045d3d5ffd956fa0a461da38a44685d6b2"
@@ -941,6 +977,18 @@ deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 version = "1.0.3"
 
+[[deps.TableTraits]]
+deps = ["IteratorInterfaceExtensions"]
+git-tree-sha1 = "c06b2f539df1c6efa794486abfb6ed2022561a39"
+uuid = "3783bdb8-4a98-5b6b-af9a-565f29a5fe9c"
+version = "1.0.1"
+
+[[deps.Tables]]
+deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "OrderedCollections", "TableTraits"]
+git-tree-sha1 = "cb76cf677714c095e535e3501ac7954732aeea2d"
+uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
+version = "1.11.1"
+
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
@@ -964,6 +1012,12 @@ weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
     TestExt = ["Test", "Random"]
+
+[[deps.TypedTables]]
+deps = ["Adapt", "Dictionaries", "Indexing", "SplitApplyCombine", "Tables", "Unicode"]
+git-tree-sha1 = "84fd7dadde577e01eb4323b7e7b9cb51c62c60d4"
+uuid = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
+version = "1.4.6"
 
 [[deps.URIs]]
 git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
@@ -1302,14 +1356,13 @@ version = "1.4.1+1"
 # ╔═╡ Cell order:
 # ╠═bc40cdd0-d3e1-11ee-03bd-85a796d31c2b
 # ╠═07932f01-9ab8-4683-af27-3d1e750afd00
+# ╠═259d0736-9646-49cb-9203-cb10009f353c
 # ╠═7789b05c-b15a-4db4-82dc-4163f63ca2c8
 # ╠═53153e7d-b6bd-4af8-914a-9d761ce8fa9a
-# ╠═259d0736-9646-49cb-9203-cb10009f353c
 # ╠═43be12a1-6a76-48d9-ad60-70e0b036dcc9
 # ╠═19a71863-bd5a-48ef-915c-585d9a9c0572
 # ╠═d7e15e98-f696-4c16-92c8-0d7720aec245
 # ╠═1cc1788d-8d49-4dec-9348-14f3e1b08720
-# ╠═b55db0cb-b225-4de6-80db-d8192e1f6ce8
 # ╠═80534c1f-e973-4596-a5a7-734aa523e69c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
