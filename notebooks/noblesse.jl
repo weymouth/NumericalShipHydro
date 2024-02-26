@@ -1,12 +1,13 @@
 ### A Pluto.jl notebook ###
-# v0.19.38
+# v0.19.39
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ bc40cdd0-d3e1-11ee-03bd-85a796d31c2b
 begin
-	using Plots,SpecialFunctions, QuadGK, FastGaussQuadrature,TypedTables
+	using Plots,SpecialFunctions, QuadGK, FastGaussQuadrature
+	using Printf,TypedTables	
 	using Base.MathConstants: γ
 	ngl=32
 	xgl,wgl = gausslegendre(ngl)
@@ -26,7 +27,7 @@ begin
 	end
 	function NewtonRaphson(f, x, tol=1e-8, itr=0, itmax=20)
 		fx =  f(x)
-	    while abs2(fx) > tol && itr>itmax
+	    while abs2(fx) > tol && itr<itmax
 	        dx = fx/derivative(f,x)
 			x -= dx/(1+abs(dx))
 			itr+=1
@@ -35,27 +36,35 @@ begin
 	end
 end;
 
-# ╔═╡ 259d0736-9646-49cb-9203-cb10009f353c
+# ╔═╡ 197eacc3-8cb3-46c7-ab24-ef0e612be564
 function NSD(x₀,f,g)
+	dg(x) = derivative(g,x); d2g(x) = derivative(dg,x); d3g(x) = derivative(d2g,x)
+	sum(x₀) do x
+		dh = [Inf,sqrt(2im/d2g(x)),(6im/d3g(x))^(1/3)]
+		r = argmin(i->abs2(dh[i]),1:3)
+		sum(zip(wgH,xgH)) do (w,p)
+			θ,ρ = angle(p*dh[2]),abs(p*dh[r])
+			h₀ = (r==2 || θ>0 || imag(x)>0 ) ? x+ρ*exp(im*θ) : x-ρ*im
+			h = NewtonRaphson(h->g(h)-g(x)-im*p^2,h₀)
+			imag(2im*exp(im*g(x))*w*f(h)*p/dg(h))
+		end
+	end
+end
+
+# ╔═╡ 259d0736-9646-49cb-9203-cb10009f353c
+function GraphicalNSD(x₀,f,g)
 	dg(x) = derivative(g,x); d2g(x) = derivative(dg,x); d3g(x) = derivative(d2g,x)
 	mapreduce(vcat,x₀) do x
 		dh = [Inf,sqrt(2im/d2g(x)),(6im/d3g(x))^(1/3)]
 		r = argmin(i->abs2(dh[i]),1:3)
-		y = imag(dh[3])
 		map(zip(wgH,xgH)) do (w,p)
 			θ,ρ = angle(p*dh[2]),abs(p*dh[r])
-			h₀ = (r==2 || θ*y>0 || imag(x)*y>0 ) ? x+ρ*exp(im*θ) : x+ρ*im
-			h = h₀
-			# h = NewtonRaphson(h->g(h)-g(x)-im*p^2,h₀)
+			h₀ = (r==2 || θ>0 || imag(x)>0 ) ? x+ρ*exp(im*θ) : x-ρ*im
+			h = NewtonRaphson(h->g(h)-g(x)-im*p^2,h₀)
 			fh = imag(2im*exp(im*g(x))*w*f(h)*p/dg(h))
 			(h=h,fh=fh)
 		end
 	end |> Table
-	# W = 0.
-	# for x in x₀
-	# 	hG = [NewtonRaphson(h->g(h)-g(x)-im*p^2,h(p,x)) for p in xgH]
-	# 	W += imag(2im*exp(im*g(x))*(wgH'* @. f(hG)*xgH/dg(hG)))
-	# end; W
 end
 
 # ╔═╡ 53153e7d-b6bd-4af8-914a-9d761ce8fa9a
@@ -68,7 +77,7 @@ end
 
 # ╔═╡ 7789b05c-b15a-4db4-82dc-4163f63ca2c8
 function Nob1bplt(x,y,z)
-	# Wi(t) = exp(z*(1+t^2))*sin((x+y*t)*hypot(1,t))
+	Wi(t) = exp(z*(1+t^2))*sin((x+y*t)*hypot(1,t))
 	# b = √(-3log(10)/z)
 	# plot(range(-b,b,1000),Wi,label=4quadgk(Wi,-b,b)[1])
 	# scatter!(xgl*b,Wi,label=4b*(wgl'*Wi.(b*xgl)))
@@ -81,17 +90,13 @@ function Nob1bplt(x,y,z)
 	scatter(reim.(T₀),label="t₀",xlabel="Re(t)",ylabel="Im(t)",
 		ylims = (-2,2), xlims = (-5,5))
 	g(t) = (x+y*t)*sqrt(1+t^2)
-	hG = NSD(T₀,t->exp(z*(1+t^2)),g)
+	hG = GraphicalNSD(T₀,t->exp(z*(1+t^2)),g)
 	scatter!(reim.(hG.h),marker_z=hG.fh,label="Gauss points",
 			alpha=0.5,clims=(-0.5,0.5))
-end
-
-# ╔═╡ 07932f01-9ab8-4683-af27-3d1e750afd00
-begin
-	x,y,z=-10,1,-0.01
-	y = -(x/√8+1/4)
-	# Nob1(x,y,z),Nob2(x,y,z),Nob3(x,y,z),Nob1b(x,y,z)
-	Nob1bplt(x,y,z)
+	plot!(title=@sprintf "complex Gauss point: W=%.3f, evals=O(8)" sum(hG.fh))
+	W,_,n = quadgk_count(Wi,-Inf,Inf)
+	plot!(range(-5,5,1000),t->Wi(t),alpha=0.2)
+	annotate!(-1.5,-1.5,@sprintf "QuadGK: W=%.3f, evals=%i" W n)
 end
 
 # ╔═╡ 19a71863-bd5a-48ef-915c-585d9a9c0572
@@ -113,12 +118,11 @@ function Nob1b(x,y,z)
 	Ni(t) = imag(expintx(ζ(t))+log(ζ(t))+γ)
 	f(t) = Ni(t)*√(1-t^2)
 	I,n = wgc'*f.(xgc),length(wgc)
-	# I,_,n = quadgk_count(Ni,-1,1)
 	N = 1/r+-2*(1-z/(r+abs(x)))+2I/π
 	Wi(t) = exp(z*(1+t^2))*sin((x+y*t)*hypot(1,t))
 	b = √(-3log(10)/z)
-	T₀ = stat_points(x,y,b)
-	J,m = NSD(T₀,t->exp(z*(1+t^2)),t->(x+y*t)*sqrt(1+t^2)),4length(T₀)
+	T₀ = stat_points(x,abs(y),b)
+	J,m = NSD(T₀,t->exp(z*(1+t^2)),t->(x+abs(y)*t)*sqrt(1+t^2)),4length(T₀)
 	W = 4J
 	return N+W,n,m
 end
@@ -150,12 +154,21 @@ function Nob3(x,y,z)
 	return N+W,n,m
 end
 
+# ╔═╡ 07932f01-9ab8-4683-af27-3d1e750afd00
+begin
+	x,y,z=-10,1,-0.1
+	y = abs(x/√8+1)
+	Nob1(x,y,z),Nob2(x,y,z),Nob3(x,y,z),Nob1b(x,y,z)
+	# Nob1bplt(x,y,z)
+end
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
@@ -175,7 +188,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "8a3986eda788859d5b85cd95b38e3768787e3ee0"
+project_hash = "68594e8295fdb4c1b70e6d64055512d020f515d8"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -1356,8 +1369,9 @@ version = "1.4.1+1"
 # ╔═╡ Cell order:
 # ╠═bc40cdd0-d3e1-11ee-03bd-85a796d31c2b
 # ╠═07932f01-9ab8-4683-af27-3d1e750afd00
-# ╠═259d0736-9646-49cb-9203-cb10009f353c
+# ╠═197eacc3-8cb3-46c7-ab24-ef0e612be564
 # ╠═7789b05c-b15a-4db4-82dc-4163f63ca2c8
+# ╠═259d0736-9646-49cb-9203-cb10009f353c
 # ╠═53153e7d-b6bd-4af8-914a-9d761ce8fa9a
 # ╠═43be12a1-6a76-48d9-ad60-70e0b036dcc9
 # ╠═19a71863-bd5a-48ef-915c-585d9a9c0572
