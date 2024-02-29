@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.38
+# v0.19.39
 
 using Markdown
 using InteractiveUtils
@@ -27,7 +27,7 @@ end;
 begin
 	using PlutoUI
 	xs = @bind x Slider(-5:0.5:0.5,default=-2,show_value=true)
-	ys = @bind y Slider([1/16,1/8,1/4,1/2,1,2,4],default=1/2,show_value=true)
+	ys = @bind y Slider([0,1/16,1/8,1/4,1/2,1,2,4],default=1/2,show_value=true)
 	zs = @bind z Slider([-1,-0.1,-0.01,-0.001],default=-0.1,show_value=true)
 	md"""x $xs,  y $ys,  z $zs"""
 end
@@ -121,7 +121,7 @@ $\psi'(T_0)=\frac{x T_0+y(2T_0^2+1)}{\sqrt{1+T_0^2}} = 0$
 
 Since $1+T_0^2$ is never $0$, the numerator must be, giving a quadratic equation:
 
-$T_0 = \frac {x\pm\sqrt{x^2-8y^2}}{4y}$
+$T_0 = \frac {-x\pm\sqrt{x^2-8y^2}}{4y}$
 
 So there are two stationary points depending on the $x,y$ position.
 
@@ -148,11 +148,58 @@ then our integrand would be
 $W_i = e^{z(1+h^2)+i\psi(h)} = e^{z(1+h^2)-p^2+i\psi(T_0)}$
 
 Instead of oscillating, this decays super fast along $p$ no matter the value of $z$! If we evaluate the function along that path, we can get away with a tiny number of evaluations!
+
+## Example: Centerline
+
+Let's test this out on the centerline, where $\psi=x\sqrt{1+T^2}$
 """
+
+# ╔═╡ d585c5b3-4974-4641-a8a5-7b03ea41c756
+md"""
+On the centerline, the stationary point is always $T_0=0$, so $\psi(T_0)=x$ and
+
+$\sqrt{1+h^2(p)} = x+ip^2$
+
+Solving for $h$
+
+$h(p) = \pm\sqrt{(x+ip^2)^2-1}$
+
+"""
+
+# ╔═╡ e235b93e-75bf-4635-bfe5-ca960b87a4b8
+	md"""x $xs  z $zs"""
+
+# ╔═╡ 99214961-cceb-4316-9592-ab4e69c3e089
+begin
+	f(t) = exp(z*(1+t^2))
+	g(t) = x*sqrt(1+t^2)
+	cen(t) = imag(f(t)*exp(im*g(t)))
+	h(p) = sign(p)*sqrt((g(0)+im*p^2)^2-1)
+	function compare_functions()
+		b = √(-3log(10)/z)
+		plt1 = plot(range(-b,b,1000),cen,title="real line",label="Wi(T)")
+		plt2 = plot(range(-2,2,1000),p->cen(h(p)),title="along h",label="Wi(h(p))")
+		plot(plt1,plt2,layout=(2,1))
+	end
+	compare_functions()
+end	
+
+# ╔═╡ 1767d6ed-ee3b-46dc-b3a5-d547a5ae97de
+begin
+	using ForwardDiff: derivative
+	using FastGaussQuadrature
+	xGH,wGH = gausshermite(6)
+	cenH(p) = imag(f(h(p))*exp(im*g(0))*derivative(h,p))
+	W_NSD = wGH'*cenH.(xGH)
+	W_GK = quadgk(cen,-Inf,Inf)[1]
+	W_NSD,W_GK
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
@@ -160,6 +207,8 @@ QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
+FastGaussQuadrature = "~1.0.2"
+ForwardDiff = "~0.10.36"
 Plots = "~1.40.1"
 PlutoUI = "~0.7.58"
 QuadGK = "~2.9.4"
@@ -172,13 +221,13 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "89045a31b1accba7c4cf857942e38fbacd4e2640"
+project_hash = "d1f6e0b56d05398cad239d1e006c5e9faada9b54"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
-git-tree-sha1 = "0f748c81756f2e5e6854298f11ad8b2dfae6911a"
+git-tree-sha1 = "c278dfab760520b8bb7e9511b968bf4ba38b7acc"
 uuid = "6e696c72-6542-2067-7265-42206c756150"
-version = "1.3.0"
+version = "1.2.3"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -241,6 +290,12 @@ git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.10"
 
+[[deps.CommonSubexpressions]]
+deps = ["MacroTools", "Test"]
+git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
+uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
+version = "0.3.0"
+
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
 git-tree-sha1 = "c955881e3c981181362ae4088b35995446298b80"
@@ -288,6 +343,18 @@ git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 version = "1.9.1"
 
+[[deps.DiffResults]]
+deps = ["StaticArraysCore"]
+git-tree-sha1 = "782dd5f4561f5d267313f23853baaaa4c52ea621"
+uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+version = "1.1.0"
+
+[[deps.DiffRules]]
+deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.15.1"
+
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
 git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
@@ -329,6 +396,12 @@ git-tree-sha1 = "466d45dc38e15794ec7d5d63ec03d776a9aff36e"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "4.4.4+1"
 
+[[deps.FastGaussQuadrature]]
+deps = ["LinearAlgebra", "SpecialFunctions", "StaticArrays"]
+git-tree-sha1 = "fd923962364b645f3719855c88f7074413a6ad92"
+uuid = "442a2c76-b920-505d-bb47-c5924d526838"
+version = "1.0.2"
+
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
@@ -349,6 +422,16 @@ deps = ["Logging", "Printf"]
 git-tree-sha1 = "fb409abab2caf118986fc597ba84b50cbaf00b87"
 uuid = "59287772-0a20-5a39-b81b-1366585eb4c0"
 version = "0.4.3"
+
+[[deps.ForwardDiff]]
+deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
+git-tree-sha1 = "cf0fe81336da9fb90944683b8c41984b08793dad"
+uuid = "f6369f11-7733-5829-9624-2563aa707210"
+version = "0.10.36"
+weakdeps = ["StaticArrays"]
+
+    [deps.ForwardDiff.extensions]
+    ForwardDiffStaticArraysExt = "StaticArrays"
 
 [[deps.FreeType2_jll]]
 deps = ["Artifacts", "Bzip2_jll", "JLLWrappers", "Libdl", "Zlib_jll"]
@@ -579,10 +662,10 @@ uuid = "89763e89-9b03-5906-acba-b20f662cd828"
 version = "4.5.1+1"
 
 [[deps.Libuuid_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "e5edc369a598dfde567269dc6add5812cfa10cd5"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "7f3efec06033682db852f8b3bc3c1d2b0a0ab066"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
-version = "2.39.3+0"
+version = "2.36.0+0"
 
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
@@ -891,6 +974,25 @@ version = "2.3.1"
 
     [deps.SpecialFunctions.weakdeps]
     ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+
+[[deps.StaticArrays]]
+deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
+git-tree-sha1 = "bf074c045d3d5ffd956fa0a461da38a44685d6b2"
+uuid = "90137ffa-7385-5640-81b9-e52037218182"
+version = "1.9.3"
+
+    [deps.StaticArrays.extensions]
+    StaticArraysChainRulesCoreExt = "ChainRulesCore"
+    StaticArraysStatisticsExt = "Statistics"
+
+    [deps.StaticArrays.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[[deps.StaticArraysCore]]
+git-tree-sha1 = "36b3d696ce6366023a0ea192b4cd442268995a0d"
+uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
+version = "1.4.2"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -1237,9 +1339,9 @@ version = "1.18.0+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "1ea2ebe8ffa31f9c324e8c1d6e86b4165b84a024"
+git-tree-sha1 = "873b4f805771d3e4bafe63af759a26ea8ca84d14"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.43+0"
+version = "1.6.42+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
@@ -1292,5 +1394,9 @@ version = "1.4.1+1"
 # ╟─7898c3e1-6224-4200-9bae-e1d68627c6ab
 # ╠═0239b4f9-6aeb-48f2-8045-d4ba3cc8c701
 # ╟─f4cdf4bc-2bce-4cf8-a8d2-08d4a0659317
+# ╟─d585c5b3-4974-4641-a8a5-7b03ea41c756
+# ╟─e235b93e-75bf-4635-bfe5-ca960b87a4b8
+# ╠═99214961-cceb-4316-9592-ab4e69c3e089
+# ╠═1767d6ed-ee3b-46dc-b3a5-d547a5ae97de
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
