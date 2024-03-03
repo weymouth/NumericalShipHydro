@@ -117,7 +117,7 @@ plot_surface((x,y)->-derivative(x->φ([x,y,0],qˢ,panels),x),colorbartitle="u(z=
 
 # ╔═╡ e096e3c7-85ad-49b2-b640-7aea706ca07a
 begin
-	Fn = 1. # submarine Froude number
+	Fn = 1 # submarine Froude number
 	Aᵏ = ∂ₙϕ.(panels,panels';G=kelvin,Fn) # Use G=kelvin(x,a;Fn)!
 	qᵏ = Aᵏ \ b; @assert Aᵏ*qᵏ ≈ b
 end
@@ -128,7 +128,7 @@ plot(Plots.heatmap(0.5log.(Aˢ .^2),yflip=true,title="log.(|Aˢ|)"),
 	 layout=(1,2),size=(600,300),clims=(-6,2))
 
 # ╔═╡ ec703fbe-1b84-4d12-b65c-19bddd3035c4
-plot_surface((x,y)->Fn^2*ζ(x,y,qᵏ,panels;G=kelvin,Fn),colorbartitle="ζ",c=:balance)
+plot_surface((x,y)->ζ(x,y,qᵏ,panels;G=kelvin,Fn),colorbartitle="ζ",c=:balance)
 
 # ╔═╡ 3dd47fb6-35c8-4042-a691-4be160f77e66
 md"""
@@ -1426,7 +1426,7 @@ version = "1.4.1+1"
 # ╔═╡ Cell order:
 # ╠═6aa38485-f860-4834-ac8b-7a7761fa26e0
 # ╟─76cbc520-3f93-41de-a7e7-7def53de203e
-# ╠═0bbd6330-9492-4af6-aaa1-c75be5ee61ee
+# ╟─0bbd6330-9492-4af6-aaa1-c75be5ee61ee
 # ╟─6c9e0bbc-d864-11ee-17bc-6b7763404349
 # ╟─06de07d4-003f-4f41-b10d-a4e3c12e3beb
 # ╟─bc0bb478-ddfd-4e13-8758-c5c1150578e9
