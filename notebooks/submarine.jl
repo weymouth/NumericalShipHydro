@@ -16,27 +16,9 @@ end
 
 # ╔═╡ 6aa38485-f860-4834-ac8b-7a7761fa26e0
 begin
-	using NeumannKelvin # new pacakge!
+	using NeumannKelvin # new package!
 	using NeumannKelvin: param_props,∂ₙϕ,Uₙ,φ,∇φ # panel functions
 	using NeumannKelvin: kelvin,source # Greens functions
-end
-
-# ╔═╡ 0bbd6330-9492-4af6-aaa1-c75be5ee61ee
-begin
-	using Plots
-	using PlotlyBase
-	plotly()
-	function plot_surface(f;normalize=false,xg=range(-8,2,50),yg=range(-3,3,30),kwargs...)
-		if normalize
-			zg = f.(xg',yg)
-			mx = maximum(abs,zg)
-			levels = -0.9:0.1:0.9
-			Plots.contourf(xg,yg,zg/mx;levels,aspect_ratio=:equal,kwargs...)
-		else
-			Plots.contourf(xg,yg,f;aspect_ratio=:equal,kwargs...)
-		end
-	end
-	ζ(x,y,q,panels;Fn,kwargs...) = Fn^2*derivative(x->φ(SA[x,y,0],q,panels;kwargs...),x)
 end
 
 # ╔═╡ 6c9e0bbc-d864-11ee-17bc-6b7763404349
@@ -45,18 +27,42 @@ begin
 	md""" Z $(@bind Zp Slider([-2,-1,-0.5,-0.2,0],default=-0.5,show_value=true)),  Fn $(@bind Fnp Slider([0.3,0.5,1.0,1.5],default=1,show_value=true)),  G vs ζ $(@bind show_green CheckBox(default=true))"""
 end
 
+# ╔═╡ 98242910-e65e-4a00-8ce4-92233be77c3a
+begin
+	using Plots
+	using PlotlyBase
+	plotly()
+end;
+
+# ╔═╡ be6dec6f-2a55-4f8c-8852-52830656c062
+md"""
+
+# Linear free surface waves and forces
+
+In the last notebook we wrote down the Neumann-Kelvin Greens function. I've coded up that function along with the panel method functions from the sphere notebook into their own package. 
+
+> Please make sure you are using v0.1.2 or higher! Click on the ✓ below to check your version and the ↑ to upgrade if needed.
+"""
+
 # ╔═╡ 76cbc520-3f93-41de-a7e7-7def53de203e
 md"""
-Bernoulli
+## Point source test
 
-$p+\frac 12 \rho \left|\vec U + \vec u\right|^2 + \rho g z = p₀$
-
-Set $\vec U = [-U,0,0]$ and linearize by assuming $u\ll U$ on $z=\zeta \ll L$ tso give
-
-$\frac ζL = \left. \text{Fn}^2\frac{\partial\phi}{\partial x}\right|_{z=0}$
-
-So we can see that our linearization is only consistent when Fn $\ll 1$ or the depth of the disturbance is such that the amplitude stays small regardless.
+Let's test the `kelvin` function by placing a source at $a=[0,0,Z]$ moving with Froude number $\text(Fn)$ and plotting the full potential and surface elevation.
 """
+
+# ╔═╡ d26bbf92-04dc-4ba5-8782-cc338888b5a7
+function plot_surface(f;normalize=false,
+	xg=range(-8,2,50),yg=range(-3,3,30),kwargs...)
+	if normalize
+		zg = f.(xg',yg)
+		mx = maximum(abs,zg)
+		levels = -0.9:0.1:0.9
+		Plots.contourf(xg,yg,zg/mx;levels,aspect_ratio=:equal,kwargs...)
+	else
+		Plots.contourf(xg,yg,f;aspect_ratio=:equal,kwargs...)
+	end
+end
 
 # ╔═╡ 06de07d4-003f-4f41-b10d-a4e3c12e3beb
 begin
@@ -72,9 +78,41 @@ begin
 	plot!([0,-8],[0,-√8],c=:black,ls=:dot,label=nothing)
 end
 
+# ╔═╡ 0ac277f4-27da-410b-a732-13be2f0b9667
+md"""
+I've added the $\frac 1 {\sqrt 8}$ Kelvin wake angle lines to the plot above and that checks out.
+
+#### Activity
+ - Can you come up with any other back-of-the-envelop checks for this function?
+ - Can you adjust the values to demonstrate an obvious issue with the function? 
+
+"""
+
+# ╔═╡ a4a18d5d-8af6-445a-9972-58df277c23d6
+md"""
+## Free surface elevation
+
+The linear free surface elevation displayed above is determined from the Bernoulli equation
+
+$p+\frac 12 \rho \left|\vec U + \vec u\right|^2 + \rho g z = p₀$
+
+Set $\vec U = [-U,0,0]$ and linearize by assuming $u\ll U$ on $z=\zeta \ll L$ to give
+
+$\frac ζL = \left. \text{Fn}^2\frac{\partial\phi}{\partial x}\right|_{z=0}$
+
+> Note that our linearization is only consistent when Fn $\ll 1$ or the depth of the disturbance is such that the amplitude stays small regardless.
+
+This is implemented in the one-liner below.
+"""
+
+# ╔═╡ 8f42d597-b7c6-4df0-a966-8807b74ae551
+ζ(x,y,q,panels;Fn,kwargs...) = Fn^2*derivative(x->φ(SA[x,y,0],q,panels;kwargs...),x)
+
 # ╔═╡ bc0bb478-ddfd-4e13-8758-c5c1150578e9
 md"""
 ## Prolate spheroid submarine
+
+Remarkably, our panel method from before will work _without alteration_ other than swapping `G=source` to `G=kelvin`. Let's test that out on a mathematically idealized submarine.
 
 We've already seen the parametric equation for a spheroid and how to generate panels from it. I've add a vertical offset to make sure the panels are all below the $z=0$ free surface to avoid the bug above.
 """
@@ -90,7 +128,7 @@ begin
 	    end |> Table
 	end
 	centers(panels) = eachrow(stack(panels.x))
-	h = 0.15; panels = submarine(h); N = length(panels)
+	h = 0.15; Z=-0.3; panels = submarine(h;Z); N = length(panels)
 	md"""Number of panels N = $N"""
 end
 
@@ -105,6 +143,15 @@ begin
 	The color of each dot is dA/h² for the panel, which drops to less than 0.5 at the poles. The ratio of the mean curvature (H=0.5∇⋅n) for this prolate spheroid at the equator vs the poles is $(H(0,0.5)/H(π/2,0.5)), so even more refinement near the poles would probably be good."""
 end
 
+# ╔═╡ 416fde17-16ba-4a29-a910-7f9609243bfd
+md"""
+## Comparing `source` to `kelvin`
+
+Now that we have a set of panels below $z=0$ we can use our panel method to solve for the flow. 
+
+Lets start by using the simple `G=source`, and looking at the velocity on the $z=0$ plane.
+"""
+
 # ╔═╡ 345b1774-b323-4b48-99d5-2911f25acdde
 begin
 	b = -Uₙ.(panels, U= [-1.,0.,0.])   # flow right to left
@@ -115,33 +162,96 @@ end
 # ╔═╡ ab41acd9-56a5-4296-b77a-901584a456bb
 plot_surface((x,y)->-derivative(x->φ([x,y,0],qˢ,panels),x),colorbartitle="u(z=0)/U")
 
+# ╔═╡ 9026388a-2b0e-41f3-8bcc-a62aaec6fd5b
+md"""
+Notice that even though the body is very close, the flow on the $z=0$ plane is almost uneffected. Only a 16% disturbance in the flow speed. Also notice that the disturbance is symmetric, both in y and x.
+
+Ok - now let's swap the Greens function!
+"""
+
 # ╔═╡ e096e3c7-85ad-49b2-b640-7aea706ca07a
 begin
-	Fn = 1 # submarine Froude number
+	Fn = 0.5 # submarine Froude number
 	Aᵏ = ∂ₙϕ.(panels,panels';G=kelvin,Fn) # Use G=kelvin(x,a;Fn)!
 	qᵏ = Aᵏ \ b; @assert Aᵏ*qᵏ ≈ b
 end
+
+# ╔═╡ c5f6043c-9c38-4e42-a680-10980455421d
+md"""
+
+And just like that, it's solved.
+
+## Safety checks
+
+As always, we should check what we just did by looking at the new inputs and doing some basic safety checks on the outputs. 
+
+First, let's compare the source vs kelvin influence matrices.
+"""
 
 # ╔═╡ 4356d45d-e29f-4adf-848a-ff74a65bec45
 plot(Plots.heatmap(0.5log.(Aˢ .^2),yflip=true,title="log.(|Aˢ|)"),
 	 Plots.heatmap(0.5log.(Aᵏ .^2),yflip=true,title="log.(|Aᵏ|)"),
 	 layout=(1,2),size=(600,300),clims=(-6,2))
 
+# ╔═╡ b1856122-babd-4ff6-bcf5-d1638a1f212d
+md"""
+The biggest difference in the two matrices is below the diagonal.
+
+#### Activity
+
+Recall that $a_{i,j}$ is the influence of panel $j$ on panel $i$. 
+ - What does this mean about the relative positions of the two panels near and below the diagonal?
+ - Explain the difference in the matrices physically in terms of the two new terms in `kelvin`.
+
+
+Now let's look at the wave field
+"""
+
 # ╔═╡ ec703fbe-1b84-4d12-b65c-19bddd3035c4
-plot_surface((x,y)->ζ(x,y,qᵏ,panels;G=kelvin,Fn),colorbartitle="ζ",c=:balance)
+plot_surface((x,y)->ζ(x,y,qᵏ,panels;G=kelvin,Fn),colorbartitle="ζ/L",c=:balance)
+
+# ╔═╡ c04b8e03-221e-4d89-829d-9de5926ce886
+md"""
+Pretty similar to wave field for the single point source. So at least we didn't mess it up too badly, but I don't see any good way to apply more qualitative checks to this picture.
+"""
 
 # ╔═╡ 3dd47fb6-35c8-4042-a691-4be160f77e66
 md"""
+## Forces
+
+Instead, let's get quantitative by measuring the forces on the body. 
+
+From the Bernoulli equation above, the total force is a combination of the force due to weight and convection, i.e. the bouyant force
 
 $\vec F_g = \oint \rho g z \hat n\ \text{d}a = \rho g V\hat z$
+
+and the dynamic force
+
 $\vec C_D = \frac{\vec F_D}{\tfrac12 \rho U^2} = -\oint c_p \hat n \ \text{d}a$
+
+where $c_p$ is the dynamic pressure coefficient
+
 $c_p = 1-\frac{\left|\vec U+\vec\nabla\varphi\right|^2}{U^2}$ 
+
+---
+
+To start let's implement the code to calculate the "bouyant force coefficient" on a set of panels, which is just it's volume! 
 """
 
 # ╔═╡ 9a12d4ef-b599-4d20-acdb-9e15c86afe1b
 bouyancy(panels) = sum(panels) do pᵢ
-	pᵢ.x[3]*pᵢ.n*pᵢ.dA
+	z = pᵢ.x[3]   # centroid depth
+	z*pᵢ.n*pᵢ.dA  # integrand
 end; bouyancy(panels) / (π/24) # should be [0,0,1]
+
+# ╔═╡ 350e7836-33d1-4a11-8b15-8b35457810cd
+md"""
+The volume of a prolate spheroid is $\frac 43 \pi r^2 R$, and I've used $R=\frac 12,r=\frac 14$ above, so $V=\pi/24$, matching our calculation to 0.1%.
+
+---
+
+Next, we'll get the dynamic pressure coefficient on all the panels.
+"""
 
 # ╔═╡ 0c377b95-ec26-4364-b717-bc0fd1230681
 begin
@@ -152,6 +262,20 @@ end;
 # ╔═╡ abf31c5c-fb8b-4e5b-8efd-6f419dd3e54e
 Plots.scatter3d(centers(panels)...,marker_z=cₚᵏ,label=nothing,c=:curl,clims=(-1,1))
 
+# ╔═╡ ba240bc6-b242-4f94-87df-a14435645490
+md"""
+This plot is worth moving around a bit to get a feel for the pressure distribution on the hull.
+
+#### Activity
+ - Sanity check the front and back stagnation point values. 
+ - How does the top side differ from the bottom? How about front and back?
+ - How does this compare to the infinite domain case?
+
+---
+
+Finally, we can integrate to give the total dynamic force coefficient.
+"""
+
 # ╔═╡ ad92bc28-0bc7-4c95-bda6-67d6d0442fc3
 force(q,panels;kwargs...) = sum(panels) do pᵢ
 	cₚ = 1-u²(pᵢ.x,q,panels;kwargs...)
@@ -160,6 +284,92 @@ end; force(qˢ,panels;G=source) # should be zero(3)
 
 # ╔═╡ 5cb366a0-b382-4b8c-8763-77d314973a43
 force(qᵏ,panels;G=kelvin,Fn) 
+
+# ╔═╡ 24b16416-e74a-4ad2-b694-738159dae75c
+md"""
+Since the flow is no longer symmetric, we see a net force in both x and z!
+
+#### Activity
+ - What is the next force in z? 
+ - Could we replicate this without a free surface?
+ - Would this also let us replicate the drag?
+
+"""
+
+# ╔═╡ 3bb975a7-7f34-40fe-9b7c-3a1145690c11
+md"""
+
+## Convergence and Validation
+
+Just like the sphere case, we also need to check our method's numerical convergence and compare to a known solution. In this case, Havelock determined an exact solution to the _linear_ potential flow over a submerged spheroid. 
+
+Let's generate a function to solve for `q` & compute the wave forces given a set of `panels` and key-word arguments.
+"""
+
+# ╔═╡ 43d7ade0-190c-4ca5-a9ec-2ddc7559e087
+function solve_force(panels;kwargs...)
+	A,b = Aᵏ = ∂ₙϕ.(panels,panels';kwargs...),-Uₙ.(panels, U= [-1.,0.,0.])
+	q = A\b; @assert A*q ≈ b
+	force(q,panels;kwargs...)
+end
+
+# ╔═╡ 0754f8f6-e8fb-43ac-8785-d0cf09819073
+md"""
+Note that the hard work is done in defining the functions like `kelvin` `submarine` and `force`. This `solve_force` function is easy.
+
+Let's start by using this function to test our force convergence with `h/L`.
+"""
+
+# ╔═╡ 3b2d70f4-3e7e-43f8-958a-39bf348b8b00
+data = map(4:8) do i 
+	h = √0.5^i # approximate spacings
+	panels = submarine(h;Z=-1/8,r=1/12)
+	f = solve_force(panels;G=kelvin,Fn = 0.5)
+	(h=h,drag=-f[1],lift=f[3])
+end |>Table;
+
+# ╔═╡ 14723090-891d-4aa8-9a21-771f34102114
+begin
+	Plots.scatter(data.h,data.drag,label = "drag", xlabel="h/L", 
+		ylabel="force coefficient",xscale=:log10, xlims = (1e-2,1) ,ylims = (0,1e-2))
+	Plots.scatter!(data.h,data.lift, label="lift")
+end
+
+# ╔═╡ cb56800d-5151-4143-9759-6e510089e4db
+md"""
+#### Activity
+
+Our forces, especially the lift force, depend strongly on `h/L`. Discuss if there is a way we estimate the "converged" forces without waiting 20 minutes for a simulation with `L=100h`.
+
+---
+
+Finally, lets check how our wave drag force depends on Froude number.
+"""
+
+# ╔═╡ dc6bcf00-8191-4168-82de-1cd2d8b4666b
+Fdata = map(0.4:0.05:0.8) do Fn
+	h = 0.1 # 0.5 much slower, but better
+	panels = submarine(h;Z=-1/8,r=1/12)
+	f = solve_force(panels;G=kelvin,Fn)
+	(Fn=Fn,drag=-f[1],lift=f[3])
+end |>Table;
+
+# ╔═╡ f57929d5-ccc3-47aa-b79a-46450a1f7da9
+Plots.scatter(Fdata.Fn,Fdata.drag,label = nothing, xlabel="Fn", 
+	ylabel="wave drag coefficient",ylims = (0,8e-3))
+
+# ╔═╡ 8d544622-8eb7-4dc5-870e-39ec21f26c70
+md"""
+
+Here is a plot from Baar and Price 1986, for (coincidentally) the same Z/L and r/L ratio. Note that they scaled by $\rho U^2$ instead of $\frac 12 \rho U^2$, so there is a factor of 2 difference.
+![](https://raw.githubusercontent.com/weymouth/NumericalShipHydro/9349f0512fe3ee3a1164d8e0ef6e8fda71f3899d/Baar_1982_prolate_spheroid.png)
+
+As you can see, the trend and order of magnitude are captured. Our peak values are a little too high, but we can see from the convergence test that this is truncation error. 
+
+#### Activity
+ - Have we validated the linear free surface code?
+ - What additional tests should we do?
+"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -399,11 +609,10 @@ git-tree-sha1 = "21efd19106a55620a188615da6d3d06cd7f6ee03"
 uuid = "a3f928ae-7b40-5064-980b-68af3947d34b"
 version = "2.13.93+0"
 
-[[deps.Formatting]]
-deps = ["Logging", "Printf"]
-git-tree-sha1 = "fb409abab2caf118986fc597ba84b50cbaf00b87"
-uuid = "59287772-0a20-5a39-b81b-1366585eb4c0"
-version = "0.4.3"
+[[deps.Format]]
+git-tree-sha1 = "f3cf88025f6d03c194d73f5d13fee9004a108329"
+uuid = "1fa38f19-a742-5d3f-a2b9-30dd87b9d5f8"
+version = "1.3.6"
 
 [[deps.ForwardDiff]]
 deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
@@ -571,10 +780,10 @@ uuid = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 version = "1.3.1"
 
 [[deps.Latexify]]
-deps = ["Formatting", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Printf", "Requires"]
-git-tree-sha1 = "f428ae552340899a935973270b8d98e5a31c49fe"
+deps = ["Format", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Requires"]
+git-tree-sha1 = "cad560042a7cc108f5a4c24ea1431a9221f22c1b"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
-version = "0.16.1"
+version = "0.16.2"
 
     [deps.Latexify.extensions]
     DataFramesExt = "DataFrames"
@@ -878,9 +1087,9 @@ version = "1.2.0"
 
 [[deps.Preferences]]
 deps = ["TOML"]
-git-tree-sha1 = "9e8fed0505b0c15b4c1295fd59ea47b411c019cf"
+git-tree-sha1 = "9306f6085165d270f7e3db02af26a400d580f5c6"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
-version = "1.4.2"
+version = "1.4.3"
 
 [[deps.Printf]]
 deps = ["Unicode"]
@@ -1424,25 +1633,47 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
+# ╟─be6dec6f-2a55-4f8c-8852-52830656c062
 # ╠═6aa38485-f860-4834-ac8b-7a7761fa26e0
 # ╟─76cbc520-3f93-41de-a7e7-7def53de203e
-# ╟─0bbd6330-9492-4af6-aaa1-c75be5ee61ee
 # ╟─6c9e0bbc-d864-11ee-17bc-6b7763404349
 # ╟─06de07d4-003f-4f41-b10d-a4e3c12e3beb
+# ╟─d26bbf92-04dc-4ba5-8782-cc338888b5a7
+# ╟─0ac277f4-27da-410b-a732-13be2f0b9667
+# ╟─a4a18d5d-8af6-445a-9972-58df277c23d6
+# ╠═8f42d597-b7c6-4df0-a966-8807b74ae551
 # ╟─bc0bb478-ddfd-4e13-8758-c5c1150578e9
 # ╠═7c9265d4-0bca-4f50-af24-b4c49fab0280
 # ╟─0a8d54f5-7e04-4fa4-bfa6-209ad3133be9
 # ╟─5396139c-4bdd-4634-a3c6-c83845f514dc
+# ╟─416fde17-16ba-4a29-a910-7f9609243bfd
 # ╠═345b1774-b323-4b48-99d5-2911f25acdde
 # ╟─ab41acd9-56a5-4296-b77a-901584a456bb
+# ╟─9026388a-2b0e-41f3-8bcc-a62aaec6fd5b
 # ╠═e096e3c7-85ad-49b2-b640-7aea706ca07a
+# ╟─c5f6043c-9c38-4e42-a680-10980455421d
 # ╟─4356d45d-e29f-4adf-848a-ff74a65bec45
+# ╟─b1856122-babd-4ff6-bcf5-d1638a1f212d
 # ╟─ec703fbe-1b84-4d12-b65c-19bddd3035c4
+# ╟─c04b8e03-221e-4d89-829d-9de5926ce886
 # ╟─3dd47fb6-35c8-4042-a691-4be160f77e66
 # ╠═9a12d4ef-b599-4d20-acdb-9e15c86afe1b
+# ╟─350e7836-33d1-4a11-8b15-8b35457810cd
 # ╠═0c377b95-ec26-4364-b717-bc0fd1230681
 # ╟─abf31c5c-fb8b-4e5b-8efd-6f419dd3e54e
+# ╟─ba240bc6-b242-4f94-87df-a14435645490
 # ╠═ad92bc28-0bc7-4c95-bda6-67d6d0442fc3
 # ╠═5cb366a0-b382-4b8c-8763-77d314973a43
+# ╟─24b16416-e74a-4ad2-b694-738159dae75c
+# ╟─3bb975a7-7f34-40fe-9b7c-3a1145690c11
+# ╠═43d7ade0-190c-4ca5-a9ec-2ddc7559e087
+# ╟─0754f8f6-e8fb-43ac-8785-d0cf09819073
+# ╠═3b2d70f4-3e7e-43f8-958a-39bf348b8b00
+# ╟─14723090-891d-4aa8-9a21-771f34102114
+# ╟─cb56800d-5151-4143-9759-6e510089e4db
+# ╠═dc6bcf00-8191-4168-82de-1cd2d8b4666b
+# ╟─f57929d5-ccc3-47aa-b79a-46450a1f7da9
+# ╟─8d544622-8eb7-4dc5-870e-39ec21f26c70
+# ╟─98242910-e65e-4a00-8ce4-92233be77c3a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
