@@ -41,7 +41,7 @@ md"""
 
 In the last notebook we wrote down the Neumann-Kelvin Greens function. I've coded up that function along with the panel method functions from the sphere notebook into their own package. 
 
-> Please make sure you are using v0.1.2 or higher! Click on the ✓ below to check your version and the ↑ to upgrade if needed.
+> Please make sure you are using v0.1.2! Click on the ✓ below to check your version and the ↑ to upgrade if needed.
 """
 
 # ╔═╡ 76cbc520-3f93-41de-a7e7-7def53de203e
@@ -260,7 +260,7 @@ begin
 end;
 
 # ╔═╡ abf31c5c-fb8b-4e5b-8efd-6f419dd3e54e
-Plots.scatter3d(centers(panels)...,marker_z=cₚᵏ,label=nothing,c=:curl,clims=(-1,1))
+Plots.scatter3d(centers(panels)...,marker_z=cₚᵏ,label=nothing,clims=(-1,1))
 
 # ╔═╡ ba240bc6-b242-4f94-87df-a14435645490
 md"""
@@ -348,7 +348,7 @@ Finally, lets check how our wave drag force depends on Froude number.
 
 # ╔═╡ dc6bcf00-8191-4168-82de-1cd2d8b4666b
 Fdata = map(0.4:0.05:0.8) do Fn
-	h = 0.1 # 0.5 much slower, but better
+	h = 0.1 # 0.05 much slower, but better
 	panels = submarine(h;Z=-1/8,r=1/12)
 	f = solve_force(panels;G=kelvin,Fn)
 	(Fn=Fn,drag=-f[1],lift=f[3])
@@ -1659,8 +1659,9 @@ version = "1.4.1+1"
 # ╟─3dd47fb6-35c8-4042-a691-4be160f77e66
 # ╠═9a12d4ef-b599-4d20-acdb-9e15c86afe1b
 # ╟─350e7836-33d1-4a11-8b15-8b35457810cd
+# ╠═acf110e7-99d2-4284-862f-ae7b63ce878e
 # ╠═0c377b95-ec26-4364-b717-bc0fd1230681
-# ╟─abf31c5c-fb8b-4e5b-8efd-6f419dd3e54e
+# ╠═abf31c5c-fb8b-4e5b-8efd-6f419dd3e54e
 # ╟─ba240bc6-b242-4f94-87df-a14435645490
 # ╠═ad92bc28-0bc7-4c95-bda6-67d6d0442fc3
 # ╠═5cb366a0-b382-4b8c-8763-77d314973a43
@@ -1672,6 +1673,7 @@ version = "1.4.1+1"
 # ╟─14723090-891d-4aa8-9a21-771f34102114
 # ╟─cb56800d-5151-4143-9759-6e510089e4db
 # ╠═dc6bcf00-8191-4168-82de-1cd2d8b4666b
+# ╠═578b6e6d-8977-41a6-9e90-1dbda4c5eac6
 # ╟─f57929d5-ccc3-47aa-b79a-46450a1f7da9
 # ╟─8d544622-8eb7-4dc5-870e-39ec21f26c70
 # ╟─98242910-e65e-4a00-8ce4-92233be77c3a
