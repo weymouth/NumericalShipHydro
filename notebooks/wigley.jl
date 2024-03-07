@@ -40,7 +40,7 @@ end;
 # ╔═╡ be6dec6f-2a55-4f8c-8852-52830656c062
 md"""
 
-# Ships and dissapointment
+# Ships and Open-source
 
 """
 
@@ -265,15 +265,20 @@ So the water line integral does have a noticible change on the drag, despite the
 """
 
 # ╔═╡ ef92e480-ba36-4bf7-8c45-ece044fb4069
+# ╠═╡ disabled = true
+#=╠═╡
 CwFn = map(0.16:0.015:0.35) do Fn
 	A = ∂ₙϕ.(panels,panels';G=kelvin,Fn,add_waterline=true)
 	q = A \ b
 	Cw = wave_drag(q,panels;G=kelvin,Fn,add_waterline=true)
 	(Fn=Fn,Cw=Cw)
 end |> Table;
+  ╠═╡ =#
 
 # ╔═╡ 8885f1f4-9f9b-47e8-b3c9-0badd9ceed77
+#=╠═╡
 Plots.scatter(CwFn.Fn,1e4CwFn.Cw,xlabel="Fn",ylabel="10⁴ Cw",label=nothing)
+  ╠═╡ =#
 
 # ╔═╡ 5eab2550-916b-4920-a76e-c2c0b1346555
 md"""
@@ -285,9 +290,10 @@ Here's what it should look like:
 
 Unfortunately, I haven't been able to track this down and so I can't validate the code's correctness for surface piercing bodies!
 
-## Activity
+## Open source codes!
 
-Let's discuss the pros and cons of using this code for the project.
+There does not appear to be a single open-source code online to calculate the calm-water resistance of a ship. You can see what a problem this can be for developers and users!
+
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -299,7 +305,7 @@ Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
-NeumannKelvin = "~0.1.2"
+NeumannKelvin = "~0.1.4"
 PlotlyBase = "~0.8.19"
 Plots = "~1.40.1"
 PlutoUI = "~0.7.58"
@@ -311,7 +317,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "e6748b67289fa44fe62bebf348f9c6c563e017d2"
+project_hash = "a2e6a0020b17bd72e67923af2c85fa1ab6ece412"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
