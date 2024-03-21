@@ -308,7 +308,7 @@ Let's generate a function to solve for `q` & compute the wave forces given a set
 
 # ╔═╡ 43d7ade0-190c-4ca5-a9ec-2ddc7559e087
 function solve_force(panels;kwargs...)
-	A,b = Aᵏ = ∂ₙϕ.(panels,panels';kwargs...),-Uₙ.(panels, U= [-1.,0.,0.])
+	A,b = ∂ₙϕ.(panels,panels';kwargs...),-Uₙ.(panels, U= [-1.,0.,0.])
 	q = A\b; @assert A*q ≈ b
 	force(q,panels;kwargs...)
 end
