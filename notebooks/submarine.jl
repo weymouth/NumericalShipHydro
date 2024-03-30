@@ -40,8 +40,6 @@ md"""
 # Linear free surface waves and forces
 
 In the last notebook we wrote down the Neumann-Kelvin Greens function. I've coded up that function along with the panel method functions from the sphere notebook into their own package. 
-
-> Please make sure you are using v0.1.2! Click on the ✓ below to check your version and the ↑ to upgrade if needed.
 """
 
 # ╔═╡ 76cbc520-3f93-41de-a7e7-7def53de203e
@@ -386,7 +384,7 @@ Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
-NeumannKelvin = "~0.1.2"
+NeumannKelvin = "~0.1.5"
 PlotlyBase = "~0.8.19"
 Plots = "~1.40.1"
 PlutoUI = "~0.7.58"
