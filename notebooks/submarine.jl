@@ -66,11 +66,13 @@ end
 
 # ╔═╡ 06de07d4-003f-4f41-b10d-a4e3c12e3beb
 begin
+	ξ(x,y) = SA[x,y,0]; a=SA[0,0,Zp]
+	G(x,y) = source(ξ(x,y),a)+kelvin(ξ(x,y),-a,Fn=Fnp)
 	if show_green
-		plot_surface((x,y)->kelvin(SA[x,y,0],SA[0,0,Zp],Fn=Fnp),normalize=true,c=:delta,
+		plot_surface(G,normalize=true,c=:delta,
 			colorbartitle="G/max(G)",title="Point source at Z=$Zp, Fn=$Fnp")
 	else
-		plot_surface((x,y)->derivative(x->kelvin(SA[x,y,0],SA[0,0,Zp],Fn=Fnp),x),
+		plot_surface((x,y)->derivative(x->G(x,y),x),
 			normalize=true,c=:balance,colorbartitle="ζ/max(ζ)",
 			title="Point source at Z=$Zp, Fn=$Fnp")
 	end
@@ -121,7 +123,7 @@ We've already seen the parametric equation for a spheroid and how to generate pa
 begin
 	function submarine(h;Z=-0.5,L=1,r=0.25)
 	    S(θ₁,θ₂) = SA[0.5L*cos(θ₁),r*cos(θ₂)*sin(θ₁),r*sin(θ₂)*sin(θ₁)+Z]
-	    dθ₁ = π/round(π*0.5L/h) # azimuth step size
+	    dθ₁ = π/round(π*0.5L/h) # cosine sampling increases density at ends 
 	    mapreduce(vcat,0.5dθ₁:dθ₁:π) do θ₁
 	        dθ₂ = π/round(π*0.25L*sin(θ₁)/h) # polar step size at this azimuth
 	        param_props.(S,θ₁,0.5dθ₂:dθ₂:2π,dθ₁,dθ₂)
@@ -273,7 +275,7 @@ This plot is worth moving around a bit to get a feel for the pressure distributi
 
 ---
 
-Finally, we can integrate to give the total dynamic force coefficient.
+Finally, we can integrate to give the total dynamic force coefficient. 
 """
 
 # ╔═╡ ad92bc28-0bc7-4c95-bda6-67d6d0442fc3
@@ -282,17 +284,23 @@ force(q,panels;kwargs...) = sum(panels) do pᵢ
 	-cₚ*pᵢ.n*pᵢ.dA
 end; force(qˢ,panels;G=source) # should be zero(3)
 
+# ╔═╡ 33e52b91-2ff4-4458-9a60-cf25e6f4ac4d
+md"""
+The source Green's function gives `force≈[0,0,0]`, as expect from D'Alembert's paradox.
+
+However, switching to `G=kelvin` gives... a non-zero force in x! And z?
+"""
+
 # ╔═╡ 5cb366a0-b382-4b8c-8763-77d314973a43
 force(qᵏ,panels;G=kelvin,Fn) 
 
 # ╔═╡ 24b16416-e74a-4ad2-b694-738159dae75c
 md"""
-Since the flow is no longer symmetric, we see a net force in both x and z!
 
 #### Activity
- - What is the next force in z? 
- - Could we replicate this without a free surface?
- - Would this also let us replicate the drag?
+ - The net force in x is the wavemaking drag! Is the sign correct?
+ - What is causing the net force in z? Is that physical?
+ - What other integrated quantities should be non-zero for this test case?
 
 """
 
@@ -301,7 +309,7 @@ md"""
 
 ## Convergence and Validation
 
-Just like the sphere case, we also need to check our method's numerical convergence and compare to a known solution. In this case, Havelock determined an exact solution to the _linear_ potential flow over a submerged spheroid. 
+Just like the sphere case, we also need to check our method's numerical convergence and compare to a known solution. In this case, Farell determined an exact solution to the _linear_ potential flow over a submerged spheroid. 
 
 Let's generate a function to solve for `q` & compute the wave forces given a set of `panels` and key-word arguments.
 """
@@ -317,29 +325,28 @@ end
 md"""
 Note that the hard work is done in defining the functions like `kelvin` `submarine` and `force`. This `solve_force` function is easy.
 
-Let's start by using this function to test our force convergence with `h/L`.
+Let's start by using this function to test our force convergence as the panel size reduces. 
+
+> Note that since our panel size varies greatly over the geometry, we'll use the inverse of the number of panels `N` as our truncation error metric.
 """
 
 # ╔═╡ 3b2d70f4-3e7e-43f8-958a-39bf348b8b00
 data = map(4:8) do i 
-	h = √0.5^i # approximate spacings
-	panels = submarine(h;Z=-1/8,r=1/12)
+	panels = submarine(√0.5^i;Z=-1/8,r=1/12)
 	f = solve_force(panels;G=kelvin,Fn = 0.5)
-	(h=h,drag=-f[1],lift=f[3])
+	(N=length(panels),drag=-f[1],lift=f[3])
 end |>Table;
 
 # ╔═╡ 14723090-891d-4aa8-9a21-771f34102114
 begin
-	Plots.scatter(data.h,data.drag,label = "drag", xlabel="h/L", 
-		ylabel="force coefficient",xscale=:log10, xlims = (1e-2,1) ,ylims = (0,1e-2))
-	Plots.scatter!(data.h,data.lift, label="lift")
+	Plots.scatter(inv.(data.N),data.drag,label = "drag", xlabel="1/N", 
+		ylabel="force coefficient",xscale=:log10, xlims = (1e-3,0.1) ,ylims = (0,1e-2))
+	Plots.scatter!(inv.(data.N),data.lift, label="lift")
 end
 
 # ╔═╡ cb56800d-5151-4143-9759-6e510089e4db
 md"""
-#### Activity
-
-Our forces, especially the lift force, depend strongly on `h/L`. Discuss if there is a way we estimate the "converged" forces without waiting 20 minutes for a simulation with `L=100h`.
+Our forces, especially the lift force, depend strongly on the panel size. But the results have pretty much converged for `N>100` panels.
 
 ---
 
@@ -348,8 +355,7 @@ Finally, lets check how our wave drag force depends on Froude number.
 
 # ╔═╡ dc6bcf00-8191-4168-82de-1cd2d8b4666b
 Fdata = map(0.4:0.05:0.8) do Fn
-	h = 0.1 # 0.05 much slower, but better
-	panels = submarine(h;Z=-1/8,r=1/12)
+	panels = submarine(0.1;Z=-1/8,r=1/12)
 	f = solve_force(panels;G=kelvin,Fn)
 	(Fn=Fn,drag=-f[1],lift=f[3])
 end |>Table;
@@ -364,7 +370,7 @@ md"""
 Here is a plot from Baar and Price 1986, for (coincidentally) the same Z/L and r/L ratio. Note that they scaled by $\rho U^2$ instead of $\frac 12 \rho U^2$, so there is a factor of 2 difference.
 ![](https://raw.githubusercontent.com/weymouth/NumericalShipHydro/9349f0512fe3ee3a1164d8e0ef6e8fda71f3899d/Baar_1982_prolate_spheroid.png)
 
-As you can see, the trend and order of magnitude are captured. Our peak values are a little too high, but we can see from the convergence test that this is truncation error. 
+As you can see, our results match the analytic solution extremely well! 
 
 #### Activity
  - Have we validated the linear free surface code?
@@ -402,9 +408,9 @@ version = "1.3.0"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "0fb305e0253fd4e833d486914367a2ee2c2e78d0"
+git-tree-sha1 = "6a55b747d1812e699320963ffde36f1ebdda4099"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "4.0.1"
+version = "4.0.4"
 weakdeps = ["StaticArrays"]
 
     [deps.Adapt.extensions]
@@ -432,10 +438,10 @@ uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.8+1"
 
 [[deps.Cairo_jll]]
-deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "4b859a208b2397a7a623a03449e4636bdb17bcf2"
+deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
+git-tree-sha1 = "a4c43f59baa34011e303e76f5c8c91bf58415aaf"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
-version = "1.16.1+1"
+version = "1.18.0+1"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -494,9 +500,9 @@ version = "1.0.5+1"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
-git-tree-sha1 = "9c4708e3ed2b799e6124b5673a712dda0b596a9b"
+git-tree-sha1 = "6cbbd4d241d7e6579ab354737f4dd95ca43946e1"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
-version = "2.3.1"
+version = "2.4.1"
 
 [[deps.Contour]]
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
@@ -510,9 +516,9 @@ version = "1.16.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
-git-tree-sha1 = "1fb174f0d48fe7d142e1109a10636bc1d14f5ac2"
+git-tree-sha1 = "0f4b5d62a88d8f59003e43c25a8a90de9eb76317"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.18.17"
+version = "0.18.18"
 
 [[deps.DataValueInterfaces]]
 git-tree-sha1 = "bfc1187b79289637fa0ef6d4436ebdfe6905cbd6"
@@ -610,9 +616,9 @@ uuid = "a3f928ae-7b40-5064-980b-68af3947d34b"
 version = "2.13.93+0"
 
 [[deps.Format]]
-git-tree-sha1 = "f3cf88025f6d03c194d73f5d13fee9004a108329"
+git-tree-sha1 = "9c68794ef81b08086aeb32eeaf33531668d5f5fc"
 uuid = "1fa38f19-a742-5d3f-a2b9-30dd87b9d5f8"
-version = "1.3.6"
+version = "1.3.7"
 
 [[deps.ForwardDiff]]
 deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
@@ -644,15 +650,15 @@ version = "3.3.9+0"
 
 [[deps.GR]]
 deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Preferences", "Printf", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "UUIDs", "p7zip_jll"]
-git-tree-sha1 = "3458564589be207fa6a77dbbf8b97674c9836aab"
+git-tree-sha1 = "3437ade7073682993e092ca570ad68a2aba26983"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.73.2"
+version = "0.73.3"
 
 [[deps.GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "FreeType2_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt6Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "77f81da2964cc9fa7c0127f941e8bce37f7f1d70"
+git-tree-sha1 = "a96d5c713e6aa28c242b0d25c1347e258d6541ab"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.73.2+0"
+version = "0.73.3+0"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
@@ -662,9 +668,9 @@ version = "0.21.0+0"
 
 [[deps.Glib_jll]]
 deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Zlib_jll"]
-git-tree-sha1 = "e94c92c7bf4819685eb80186d51c43e71d4afa17"
+git-tree-sha1 = "359a1ba2e320790ddbe4ee8b4d54a305c0ea2aff"
 uuid = "7746bdde-850d-59dc-9ae8-88ece973131d"
-version = "2.76.5+0"
+version = "2.80.0+0"
 
 [[deps.Graphite2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -679,9 +685,9 @@ version = "1.0.2"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "ac7b73d562b8f4287c3b67b4c66a5395a19c1ae8"
+git-tree-sha1 = "8e59b47b9dc525b70550ca082ce85bcd7f5477cd"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.10.2"
+version = "1.10.5"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -851,10 +857,10 @@ uuid = "94ce4f54-9a6c-5748-9c1c-f9c7231a4531"
 version = "1.17.0+0"
 
 [[deps.Libmount_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "9c30530bf0effd46e15e0fdcf2b8636e78cbbd73"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "dae976433497a2f841baadea93d27e68f1a12a97"
 uuid = "4b2f31a3-9ecc-558c-b454-b3730dcb73e9"
-version = "2.35.0+0"
+version = "2.39.3+0"
 
 [[deps.Libtiff_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "LERC_jll", "Libdl", "XZ_jll", "Zlib_jll", "Zstd_jll"]
@@ -864,9 +870,9 @@ version = "4.5.1+1"
 
 [[deps.Libuuid_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "e5edc369a598dfde567269dc6add5812cfa10cd5"
+git-tree-sha1 = "0a04a1318df1bf510beb2562cf90fb0c386f58c4"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
-version = "2.39.3+0"
+version = "2.39.3+1"
 
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
@@ -952,10 +958,10 @@ uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
 
 [[deps.NeumannKelvin]]
-deps = ["FastGaussQuadrature", "ForwardDiff", "LinearAlgebra", "QuadGK", "Reexport", "SpecialFunctions", "StaticArrays", "TypedTables"]
-git-tree-sha1 = "e2996b65c859c0619e6ff4e0f7242407a0c65d92"
+deps = ["FastGaussQuadrature", "ForwardDiff", "LinearAlgebra", "Reexport", "SpecialFunctions", "StaticArrays", "TypedTables"]
+git-tree-sha1 = "3a39a8739779962c36f6bb47a1f6f51cc3848f15"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.1.2"
+version = "0.1.5"
 
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -975,9 +981,9 @@ version = "0.8.1+2"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
-git-tree-sha1 = "51901a49222b09e3743c65b8847687ae5fc78eb2"
+git-tree-sha1 = "af81a32750ebc831ee28bdaaba6e1067decef51e"
 uuid = "4d8831e6-92b7-49fb-bdf8-b643e874388c"
-version = "1.4.1"
+version = "1.4.2"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1043,9 +1049,9 @@ version = "3.1.0"
 
 [[deps.PlotUtils]]
 deps = ["ColorSchemes", "Colors", "Dates", "PrecompileTools", "Printf", "Random", "Reexport", "Statistics"]
-git-tree-sha1 = "862942baf5663da528f66d24996eb6da85218e76"
+git-tree-sha1 = "7b1a9df27f072ac4c9c7cbe5efb198489258d1f5"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.4.0"
+version = "1.4.1"
 
 [[deps.PlotlyBase]]
 deps = ["ColorSchemes", "Dates", "DelimitedFiles", "DocStringExtensions", "JSON", "LaTeXStrings", "Logging", "Parameters", "Pkg", "REPL", "Requires", "Statistics", "UUIDs"]
@@ -1055,9 +1061,9 @@ version = "0.8.19"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "PrecompileTools", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "UnitfulLatexify", "Unzip"]
-git-tree-sha1 = "c4fa93d7d66acad8f6f4ff439576da9d2e890ee0"
+git-tree-sha1 = "3c403c6590dd93b36752634115e20137e79ab4df"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.40.1"
+version = "1.40.2"
 
     [deps.Plots.extensions]
     FileIOExt = "FileIO"
@@ -1081,9 +1087,9 @@ version = "0.7.58"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
-git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
+git-tree-sha1 = "5aa36f7049a63a1528fe8f7c3f2113413ffd4e1f"
 uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
-version = "1.2.0"
+version = "1.2.1"
 
 [[deps.Preferences]]
 deps = ["TOML"]
@@ -1100,12 +1106,6 @@ deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll
 git-tree-sha1 = "37b7bb7aabf9a085e0044307e1717436117f2b3b"
 uuid = "c0090381-4147-56d7-9ebc-da0b1113ec56"
 version = "6.5.3+1"
-
-[[deps.QuadGK]]
-deps = ["DataStructures", "LinearAlgebra"]
-git-tree-sha1 = "9b23c31e76e333e6fb4c1595ae6afa74966a729e"
-uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
-version = "2.9.4"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -1274,9 +1274,9 @@ deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.TranscodingStreams]]
-git-tree-sha1 = "54194d92959d8ebaa8e26227dbe3cdefcdcd594f"
+git-tree-sha1 = "71509f04d045ec714c4748c785a59045c3736349"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.10.3"
+version = "0.10.7"
 weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
@@ -1361,9 +1361,9 @@ version = "1.31.0+0"
 
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
-git-tree-sha1 = "07e470dabc5a6a4254ffebc29a1b3fc01464e105"
+git-tree-sha1 = "532e22cf7be8462035d092ff21fada7527e2c488"
 uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
-version = "2.12.5+0"
+version = "2.12.6+0"
 
 [[deps.XSLT_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "Pkg", "XML2_jll", "Zlib_jll"]
@@ -1373,9 +1373,9 @@ version = "1.1.34+0"
 
 [[deps.XZ_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "37195dcb94a5970397ad425b95a9a26d0befce3a"
+git-tree-sha1 = "ac88fb95ae6447c8dda6a5503f3bafd496ae8632"
 uuid = "ffd25f8a-64ca-5728-b0f7-c24cf3aae800"
-version = "5.6.0+0"
+version = "5.4.6+0"
 
 [[deps.Xorg_libICE_jll]]
 deps = ["Libdl", "Pkg"]
@@ -1528,9 +1528,9 @@ version = "1.2.13+1"
 
 [[deps.Zstd_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "49ce682769cd5de6c72dcf1b94ed7790cd08974c"
+git-tree-sha1 = "e678132f07ddb5bfa46857f0d7620fb9be675d3b"
 uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
-version = "1.5.5+0"
+version = "1.5.6+0"
 
 [[deps.eudev_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "gperf_jll"]
@@ -1587,9 +1587,9 @@ version = "1.18.0+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "1ea2ebe8ffa31f9c324e8c1d6e86b4165b84a024"
+git-tree-sha1 = "d7015d2e18a5fd9a4f47de711837e980519781a4"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.43+0"
+version = "1.6.43+1"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
@@ -1659,11 +1659,11 @@ version = "1.4.1+1"
 # ╟─3dd47fb6-35c8-4042-a691-4be160f77e66
 # ╠═9a12d4ef-b599-4d20-acdb-9e15c86afe1b
 # ╟─350e7836-33d1-4a11-8b15-8b35457810cd
-# ╠═acf110e7-99d2-4284-862f-ae7b63ce878e
 # ╠═0c377b95-ec26-4364-b717-bc0fd1230681
-# ╠═abf31c5c-fb8b-4e5b-8efd-6f419dd3e54e
+# ╟─abf31c5c-fb8b-4e5b-8efd-6f419dd3e54e
 # ╟─ba240bc6-b242-4f94-87df-a14435645490
 # ╠═ad92bc28-0bc7-4c95-bda6-67d6d0442fc3
+# ╟─33e52b91-2ff4-4458-9a60-cf25e6f4ac4d
 # ╠═5cb366a0-b382-4b8c-8763-77d314973a43
 # ╟─24b16416-e74a-4ad2-b694-738159dae75c
 # ╟─3bb975a7-7f34-40fe-9b7c-3a1145690c11
@@ -1673,7 +1673,6 @@ version = "1.4.1+1"
 # ╟─14723090-891d-4aa8-9a21-771f34102114
 # ╟─cb56800d-5151-4143-9759-6e510089e4db
 # ╠═dc6bcf00-8191-4168-82de-1cd2d8b4666b
-# ╠═578b6e6d-8977-41a6-9e90-1dbda4c5eac6
 # ╟─f57929d5-ccc3-47aa-b79a-46450a1f7da9
 # ╟─8d544622-8eb7-4dc5-870e-39ec21f26c70
 # ╟─98242910-e65e-4a00-8ce4-92233be77c3a
