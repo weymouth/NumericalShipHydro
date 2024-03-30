@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.38
+# v0.19.40
 
 using Markdown
 using InteractiveUtils
@@ -17,7 +17,7 @@ end
 # ╔═╡ 6aa38485-f860-4834-ac8b-7a7761fa26e0
 begin
 	using NeumannKelvin 
-	using NeumannKelvin: quadξ,kelvin,source
+	using NeumannKelvin: kelvin,source
 end
 
 # ╔═╡ 138144cb-6e6a-421e-b441-7777f58fd69e
@@ -40,7 +40,7 @@ end;
 # ╔═╡ be6dec6f-2a55-4f8c-8852-52830656c062
 md"""
 
-# Ships and Open-source
+# Ships waterlines and wave drag
 
 """
 
@@ -96,14 +96,9 @@ Plots.scatter3d(centers(panels)...,marker_z=panels.dA/h^2,label=nothing)
 md"""
 > Note, the figure above is not using an equal size for each axis
 
-When dealing with ship geometries, even as simple as this one, there are a few things to keep in mind. 
- - Unlike with a submarine, a ship has panels touching the free surface. We saw the integrals in our Nuemann-Kelvin Greens function are very poorly behaved as $z\rightarrow 0$.
- - The spacing along the waterline is important to resolve the wavelength of the generated waves. O(10) panels per wavelength is a good idea.
- - The wigley hull is very slender, with sharp leading and trailing edges. This can cause problems since the curvature is extreme.
-
 ## Waterline elevation
 
-Bearing all that in mind, we have our panels so we can set up and solve the linear system as usual.
+We have our panels so we can set up and solve the linear system as usual.
 """
 
 # ╔═╡ 81f9f86e-60eb-4554-a4fb-8ea08cb9d5ab
@@ -137,15 +132,17 @@ $\zeta(x,y,0) = \zeta(x,y,z)-z \frac{\partial\zeta}{\partial z}$
 # ╔═╡ e50acf38-bd46-44ba-9e18-4d6ec04a1b1b
 md"""
 
-And here is a plot from a paper using a similar linear method along with experimental measurements.
+And here is a plot from Baar's thesis, with his Neuman-Kelvin results along with experimental measurements for two Wigley hull experiments.
 
 ![](https://github.com/weymouth/NumericalShipHydro/blob/8260a6a3d99b8d67340e82826452ad11640f5e3a/Wigley_waterline.png?raw=true)
 
-You can see that our waterline is similar, but some of the features (especially the exit height) don't seem to be correct. 
+- First off, we can see that both the Neuman-Kelvin methods don't capture the large bow wave height very well. This seems consistent with linear theory's restriction to low wave amplitudes. 
+
+- Second, we can see that while our numerical method matches Baar's fairly well, some of the features (especially the near the midbody) are a little off. 
 
 ## Waterline integrals
 
-While there are lots of potential numerical issues (listed above) to explain this, there is also one new _modelling error_ we introduced when piercing the free-surface plane. Our potential was derived assuming an infinite free-surface, but now there is a ship in the way! 
+There is one new _modelling error_ we introduced when piercing the free-surface plane. Our potential was derived assuming an infinite free-surface, but now there is a ship in the way! 
 
 We need to account for the change in the boundary shape with an additional integral
 
@@ -153,10 +150,7 @@ $\Phi = Ux + \int_B q(x') G(x,x')da + \int_\chi q(x') G(x,x') n_x dy$
 
 The first integral is our normal panel integral over the body surface $B$, but the second is contour integral along $\chi$, the intersection between the body and $z=0$.
 
-> Cautionary note: Now we're evaluating **on** $z=0$. This is slow and very numerically sensitive.
-
-Depsite this, it isn't hard to set up numerically - it just adds a contribution from each of the panels touching $\chi$ which I check using the `iswaterline` function above.
-
+This isn't hard to set up numerically - it just adds a contribution from each of the panels touching $\chi$ which I check using the `iswaterline` function above.
 """
 
 # ╔═╡ cf26451c-0576-4653-82b9-ce251599baa0
@@ -181,16 +175,13 @@ begin
 		!iswaterline(p) && return 0.
 		
 		# waterline contour midpoint
-		χ = SA[p.x[1],p.x[2],-eps()]
+		χ = SA[p.x[1],p.x[2],eps()]
 
-		# Factor
+		# Integrand factor
 		β=-Fn^2*p.n[1]*p.T₁[2]
-	
-		# Mid-point rule if x is far away
-		sum(abs2,x-χ)>9p.dA && return G(x,χ;Fn,kwargs...)*β
-		
-		# 2-point rule otherwise
-		quadξ(t->G(x,χ+t*p.T₁;Fn,kwargs...)*β)
+
+		# Midpoint quadrature
+		β*(source(x,χ)+G(x,χ;Fn,kwargs...))
 	end
 end
 
@@ -213,7 +204,7 @@ function plot_waterline(q,panels;kwargs...)
 		ζ(x,y,z)-z*derivative(z->ζ(x,y,z),z)
 	end
 	plot(waterline_x,waterline_height,c=:black,label=nothing,
-		xlabel="x/L",ylabel="ηFn²/L")
+		xlabel="x/L",ylabel="η/L Fn²")
 	scatter!(waterline_x,waterline_height,c=:black,label=nothing)
 end;plot_waterline(q,panels;G=kelvin,Fn)
 
@@ -265,35 +256,32 @@ So the water line integral does have a noticible change on the drag, despite the
 """
 
 # ╔═╡ ef92e480-ba36-4bf7-8c45-ece044fb4069
-# ╠═╡ disabled = true
-#=╠═╡
 CwFn = map(0.16:0.015:0.35) do Fn
+	A = ∂ₙϕ.(panels,panels';G=kelvin,Fn,add_waterline=false)
+	q = A \ b
+	Cw = wave_drag(q,panels;G=kelvin,Fn,add_waterline=false)
+	(Fn=Fn,Cw=Cw)
+end |> Table;
+
+# ╔═╡ 7df951e0-c053-45da-b697-563b811e43c8
+CwFnχ = map(0.16:0.015:0.35) do Fn
 	A = ∂ₙϕ.(panels,panels';G=kelvin,Fn,add_waterline=true)
 	q = A \ b
 	Cw = wave_drag(q,panels;G=kelvin,Fn,add_waterline=true)
 	(Fn=Fn,Cw=Cw)
 end |> Table;
-  ╠═╡ =#
 
 # ╔═╡ 8885f1f4-9f9b-47e8-b3c9-0badd9ceed77
-#=╠═╡
-Plots.scatter(CwFn.Fn,1e4CwFn.Cw,xlabel="Fn",ylabel="10⁴ Cw",label=nothing)
-  ╠═╡ =#
+Plots.scatter(CwFn.Fn,1e4CwFn.Cw,xlabel="Fn",ylabel="10⁴ Cw",
+	label="without χ",ylims=(0,3.6)); Plots.scatter!(CwFnχ.Fn,1e4CwFnχ.Cw,label="with χ")
 
 # ╔═╡ 5eab2550-916b-4920-a76e-c2c0b1346555
 md"""
 
-Oh no! We're getting negative drag at low Froude number!?!
-
-Here's what it should look like:
+Here is Baar's Neuman-Kelvin and some experimental data:
 ![](https://github.com/weymouth/NumericalShipHydro/blob/8260a6a3d99b8d67340e82826452ad11640f5e3a/Wigley_Cw.png?raw=true)
 
-Unfortunately, I haven't been able to track this down and so I can't validate the code's correctness for surface piercing bodies!
-
-## Open source codes!
-
-There does not appear to be a single open-source code online to calculate the calm-water resistance of a ship. You can see what a problem this can be for developers and users!
-
+The trend of increasing $C_w$ with $Fn$ is captured, and the magnitudes match since my scaling is 2x different than Baar's. However, some of the details don't match. Interestingly, Baar himself computes the resistance two ways and gets two different answers in the above plot, so there is clearly some ambiguity. 
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -305,7 +293,7 @@ Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
-NeumannKelvin = "~0.1.4"
+NeumannKelvin = "~0.1.5"
 PlotlyBase = "~0.8.19"
 Plots = "~1.40.1"
 PlutoUI = "~0.7.58"
@@ -327,9 +315,9 @@ version = "1.3.0"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "e2a9873379849ce2ac9f9fa34b0e37bde5d5fe0a"
+git-tree-sha1 = "6a55b747d1812e699320963ffde36f1ebdda4099"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "4.0.2"
+version = "4.0.4"
 weakdeps = ["StaticArrays"]
 
     [deps.Adapt.extensions]
@@ -357,10 +345,10 @@ uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.8+1"
 
 [[deps.Cairo_jll]]
-deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "4b859a208b2397a7a623a03449e4636bdb17bcf2"
+deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
+git-tree-sha1 = "a4c43f59baa34011e303e76f5c8c91bf58415aaf"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
-version = "1.16.1+1"
+version = "1.18.0+1"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -419,9 +407,9 @@ version = "1.0.5+1"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
-git-tree-sha1 = "9c4708e3ed2b799e6124b5673a712dda0b596a9b"
+git-tree-sha1 = "6cbbd4d241d7e6579ab354737f4dd95ca43946e1"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
-version = "2.3.1"
+version = "2.4.1"
 
 [[deps.Contour]]
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
@@ -535,9 +523,9 @@ uuid = "a3f928ae-7b40-5064-980b-68af3947d34b"
 version = "2.13.93+0"
 
 [[deps.Format]]
-git-tree-sha1 = "f3cf88025f6d03c194d73f5d13fee9004a108329"
+git-tree-sha1 = "9c68794ef81b08086aeb32eeaf33531668d5f5fc"
 uuid = "1fa38f19-a742-5d3f-a2b9-30dd87b9d5f8"
-version = "1.3.6"
+version = "1.3.7"
 
 [[deps.ForwardDiff]]
 deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
@@ -569,15 +557,15 @@ version = "3.3.9+0"
 
 [[deps.GR]]
 deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Preferences", "Printf", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "UUIDs", "p7zip_jll"]
-git-tree-sha1 = "3458564589be207fa6a77dbbf8b97674c9836aab"
+git-tree-sha1 = "3437ade7073682993e092ca570ad68a2aba26983"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.73.2"
+version = "0.73.3"
 
 [[deps.GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "FreeType2_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt6Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "77f81da2964cc9fa7c0127f941e8bce37f7f1d70"
+git-tree-sha1 = "a96d5c713e6aa28c242b0d25c1347e258d6541ab"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.73.2+0"
+version = "0.73.3+0"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
@@ -587,9 +575,9 @@ version = "0.21.0+0"
 
 [[deps.Glib_jll]]
 deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Zlib_jll"]
-git-tree-sha1 = "e94c92c7bf4819685eb80186d51c43e71d4afa17"
+git-tree-sha1 = "359a1ba2e320790ddbe4ee8b4d54a305c0ea2aff"
 uuid = "7746bdde-850d-59dc-9ae8-88ece973131d"
-version = "2.76.5+0"
+version = "2.80.0+0"
 
 [[deps.Graphite2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -604,9 +592,9 @@ version = "1.0.2"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "db864f2d91f68a5912937af80327d288ea1f3aee"
+git-tree-sha1 = "8e59b47b9dc525b70550ca082ce85bcd7f5477cd"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.10.3"
+version = "1.10.5"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -776,10 +764,10 @@ uuid = "94ce4f54-9a6c-5748-9c1c-f9c7231a4531"
 version = "1.17.0+0"
 
 [[deps.Libmount_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "9c30530bf0effd46e15e0fdcf2b8636e78cbbd73"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "dae976433497a2f841baadea93d27e68f1a12a97"
 uuid = "4b2f31a3-9ecc-558c-b454-b3730dcb73e9"
-version = "2.35.0+0"
+version = "2.39.3+0"
 
 [[deps.Libtiff_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "LERC_jll", "Libdl", "XZ_jll", "Zlib_jll", "Zstd_jll"]
@@ -789,9 +777,9 @@ version = "4.5.1+1"
 
 [[deps.Libuuid_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "e5edc369a598dfde567269dc6add5812cfa10cd5"
+git-tree-sha1 = "0a04a1318df1bf510beb2562cf90fb0c386f58c4"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
-version = "2.39.3+0"
+version = "2.39.3+1"
 
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
@@ -877,10 +865,10 @@ uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
 
 [[deps.NeumannKelvin]]
-deps = ["FastGaussQuadrature", "ForwardDiff", "LinearAlgebra", "QuadGK", "Reexport", "SpecialFunctions", "StaticArrays", "TypedTables"]
-git-tree-sha1 = "b36c595774699474d5789642d7b187f631307dbd"
+deps = ["FastGaussQuadrature", "ForwardDiff", "LinearAlgebra", "Reexport", "SpecialFunctions", "StaticArrays", "TypedTables"]
+git-tree-sha1 = "3a39a8739779962c36f6bb47a1f6f51cc3848f15"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.1.4"
+version = "0.1.5"
 
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -980,9 +968,9 @@ version = "0.8.19"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "PrecompileTools", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "UnitfulLatexify", "Unzip"]
-git-tree-sha1 = "c4fa93d7d66acad8f6f4ff439576da9d2e890ee0"
+git-tree-sha1 = "3c403c6590dd93b36752634115e20137e79ab4df"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.40.1"
+version = "1.40.2"
 
     [deps.Plots.extensions]
     FileIOExt = "FileIO"
@@ -1006,9 +994,9 @@ version = "0.7.58"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
-git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
+git-tree-sha1 = "5aa36f7049a63a1528fe8f7c3f2113413ffd4e1f"
 uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
-version = "1.2.0"
+version = "1.2.1"
 
 [[deps.Preferences]]
 deps = ["TOML"]
@@ -1025,12 +1013,6 @@ deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll
 git-tree-sha1 = "37b7bb7aabf9a085e0044307e1717436117f2b3b"
 uuid = "c0090381-4147-56d7-9ebc-da0b1113ec56"
 version = "6.5.3+1"
-
-[[deps.QuadGK]]
-deps = ["DataStructures", "LinearAlgebra"]
-git-tree-sha1 = "9b23c31e76e333e6fb4c1595ae6afa74966a729e"
-uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
-version = "2.9.4"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -1199,9 +1181,9 @@ deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.TranscodingStreams]]
-git-tree-sha1 = "3caa21522e7efac1ba21834a03734c57b4611c7e"
+git-tree-sha1 = "71509f04d045ec714c4748c785a59045c3736349"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.10.4"
+version = "0.10.7"
 weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
@@ -1286,9 +1268,9 @@ version = "1.31.0+0"
 
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
-git-tree-sha1 = "07e470dabc5a6a4254ffebc29a1b3fc01464e105"
+git-tree-sha1 = "532e22cf7be8462035d092ff21fada7527e2c488"
 uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
-version = "2.12.5+0"
+version = "2.12.6+0"
 
 [[deps.XSLT_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "Pkg", "XML2_jll", "Zlib_jll"]
@@ -1298,9 +1280,9 @@ version = "1.1.34+0"
 
 [[deps.XZ_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "37195dcb94a5970397ad425b95a9a26d0befce3a"
+git-tree-sha1 = "ac88fb95ae6447c8dda6a5503f3bafd496ae8632"
 uuid = "ffd25f8a-64ca-5728-b0f7-c24cf3aae800"
-version = "5.6.0+0"
+version = "5.4.6+0"
 
 [[deps.Xorg_libICE_jll]]
 deps = ["Libdl", "Pkg"]
@@ -1453,9 +1435,9 @@ version = "1.2.13+1"
 
 [[deps.Zstd_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "49ce682769cd5de6c72dcf1b94ed7790cd08974c"
+git-tree-sha1 = "e678132f07ddb5bfa46857f0d7620fb9be675d3b"
 uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
-version = "1.5.5+0"
+version = "1.5.6+0"
 
 [[deps.eudev_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "gperf_jll"]
@@ -1512,9 +1494,9 @@ version = "1.18.0+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "1ea2ebe8ffa31f9c324e8c1d6e86b4165b84a024"
+git-tree-sha1 = "d7015d2e18a5fd9a4f47de711837e980519781a4"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.43+0"
+version = "1.6.43+1"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
@@ -1586,6 +1568,7 @@ version = "1.4.1+1"
 # ╠═36055688-cf64-4268-9917-2dda940144d3
 # ╟─7f48ceb2-ffe2-4f59-ad6f-4116394158b5
 # ╠═ef92e480-ba36-4bf7-8c45-ece044fb4069
+# ╠═7df951e0-c053-45da-b697-563b811e43c8
 # ╠═8885f1f4-9f9b-47e8-b3c9-0badd9ceed77
 # ╟─5eab2550-916b-4920-a76e-c2c0b1346555
 # ╟─98242910-e65e-4a00-8ce4-92233be77c3a
