@@ -215,7 +215,7 @@ That takes care of $N$, but we need to accelerate $W$ as well...
 
 The integrand $W_i = \exp(z(1+T^2))\sin(ψ(T))$ eventually goes to zero as $T\rightarrow \pm\infty$ since $z$ is negative. However, this drop off happens slower and slower as $z\rightarrow 0$, meaning there are more and more waves inside the envelop that we need to sample to estimate the integral accurately. 
 
-Despite this, the indefinite *integral* remains bounded as $z\rightarrow 0$. Why? It is because when the phase $\psi$ is rapidly changing, the waves are thin and constant amplitude, meaning their integral is almost perfectly zero. Only the regions where $\psi'\approx 0$ (where the phase is "stationary") make a significant contribution to the integral. 
+Despite this, the *integral* remains bounded as $z\rightarrow 0$. Why? Because when the phase $\psi$ is rapidly changing, the waves are thin and nearly constant amplitude, meaning their integral is almost zero. Only the regions where $\psi'\approx 0$ (where the phase is "stationary") make a significant contribution to the integral. 
 
 This comes up in wave analysis all the time, and the method of Stationary Phase was developed by [Lord Kelvin](https://en.wikipedia.org/wiki/Lord_Kelvin) in the late 1800s to approximate such integrals. Here's a [physics video](https://www.youtube.com/watch?v=-UgQEHHXTRM) where stationary phase is used to derive the group velocity of a wave. 
 
@@ -324,18 +324,18 @@ md"""
 ## Putting it together
 
 That was certainly a lot of work, but now we can easily create the free surface potential plot at the top of the notebook. 
- - For $\vec\xi=[\xi,0,0]$ & $\vec a=[0,0,z]$ the rankine potential is zero and $\vec x = \left[\frac{\xi g}{U^2},0,\frac{zg}{U^2}\right]$
- - The potential is simply `nearfield(`$\vec x$`)+wavelike(`$\vec x$`)`
+ - For $\vec\xi=[\xi,0,0]$ & $\vec a=[0,0,z]$ we have $\vec x = \left[\frac{\xi g}{U^2},0,\frac{zg}{U^2}\right]$
+ - The source & sink cancel, so the potential is simply `nearfield(`$\vec x$`)+wavelike(`$\vec x$`)`
  - The free surface elevation is $\frac{\zeta g}{U^2} = \frac{\partial\phi}{\partial x}$ from the free surface boundary condition
 
-Again, you can switch over to only use a 15 point Gauss quarature for the integration to see the importance of advanced intgration methods.
+Again, you can switch over to only use a 15 point Gauss quarature for the integration to see the importance of our improved integration methods.
 """
 
 # ╔═╡ fa8fc9ab-28a1-4480-b8b7-2c9c22f0325f
 begin
 	check = @bind real_only CheckBox(default=false)
 	Fns = @bind Fn Slider(2. .^(-2:1),default=1,show_value=true)
-	md"""Only use 15-point quadratures $check,  Fn $Fns,  z $zs"""
+	md"""Only use 15-point quadratures $check,  U/√g = $Fns,  z $zs"""
 end
 
 # ╔═╡ c72cb1e2-42a9-4d4d-82ab-7a608d916b30
@@ -354,7 +354,7 @@ begin
 	ζ_rng = derivative.(ϕ,xi_rng)
 	flow = let
 		plt1 = plot(xi_rng,ϕ_rng,label=nothing,xlabel="",ylabel="ϕ",
-			title="source at a=[0,0,$z], Fn=$Fn")
+			title="source at a=[0,0,$z], U/√g=$Fn")
 		plt2 = plot(xi_rng,ζ_rng,label=nothing,title="",xlabel="ξ",ylabel="ζ")
 		plot(plt1,plt2,layout=(2,1))
 	end
