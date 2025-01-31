@@ -21,7 +21,7 @@ begin
 	using PlutoUI
 	xs = @bind x Slider(-5:0.5:0.5,default=-2.5,show_value=true)
 	ys = @bind y Slider([0,1/16,1/8,1/4,1/2,1,2,4],default=1,show_value=true)
-	zs = @bind z Slider([-1,-0.1,-0.01,-0.001],default=-0.1,show_value=true)
+	zs = @bind z1 Slider([-1,-0.1,-0.01,-0.001],default=-0.1,show_value=true)
 	md"""x $xs,  y $ys,  z $zs"""
 end
 
@@ -37,8 +37,8 @@ begin
 	ψ(x,y,T) = (x+abs(y)*T)*hypot(1,T)
 	# Integrate with quadgk
 	using QuadGK
-	Ngk = quadgk_count(T->Ni(x,y,z,T),-1,1)
-	Wgk = quadgk_count(T->Wi(x,y,z,T),-Inf,Inf)
+	Ngk = quadgk_count(T->Ni(x,y,z1,T),-1,1)
+	Wgk = quadgk_count(T->Wi(x,y,z1,T),-Inf,Inf)
 end;
 
 # ╔═╡ 425be609-a19d-448d-a86c-c370fd4a0227
@@ -52,6 +52,7 @@ end;
 begin
 	using Plots
 	let
+		z = z1
 		plt1 = plot(range(-1,1,100),T->Ni(x,y,z,T),ylabel="Ni",label=sNgk)
 		b = √abs(-3log(10)/z)
 		plt2 = plot(range(-b,b,1000),T->Wi(x,y,z,T),ylabel="Wi",label=sWgk)
@@ -266,10 +267,10 @@ As you can see in the plot below, this path **completely** removes the oscillati
 """
 
 # ╔═╡ 36cce729-b4e9-4cfc-b1fe-fc5dc13ac3d1
-md"""x $xs,  z $zs"""
+zs2 = @bind z2 Slider([-1,-0.1,-0.01,-0.001],default=-0.1,show_value=true); md"""$zs2"""
 
 # ╔═╡ 9f52c359-7a84-4c03-87d8-3b17a5f93f44
-let
+let;z = z2
 	# Centerline integrand
 	Wi(t) = imag(exp(z*(1+t^2)+im*(x*sqrt(1+t^2))))
 	
@@ -290,7 +291,7 @@ end
 
 # ╔═╡ f10b555a-9f57-4d97-99f0-61da8b88496d
 md"""
-### 3c. Numerical *Near*-Stationary Phase
+### 3c. Numerical *Nearly*-Stationary Phase
 
 The example above is great, but...
 1. We can't solve for the path $h(p)$ analytically for any $y \ne 0$. 
@@ -305,13 +306,13 @@ The code blocks below demonstrate the resulting `wavelike` function:
 """
 
 # ╔═╡ 2a345247-b3e7-4613-ab8d-9b708314065d
-@time wavelike_cases = [wavelike(x,y,z) for (x,y,z) in x_cases]; # O(100) × speed-up
+@time wavelike_cases = [wavelike(x,y,z,-3log(10)) for (x,y,z) in x_cases]; # O(100) × speed-up
 
 # ╔═╡ 326a691a-3133-414f-9953-a9c8e65eb959
 @time quadgk(T->Wi(-10.,-1.,-1e-3,T),-Inf,Inf); # slow on challenging case
 
 # ╔═╡ 8f72eae3-4589-418a-8049-318d5b671862
-@time for _ in 1:1e3; wavelike(-10.,-1.,-1e-3); end # >1000 × speed-up
+@time for _ in 1:1000; wavelike(-10.,-1.,-1e-3,-3log(10)); end # ~1000 × speed-up
 
 # ╔═╡ 7ea6293c-00f1-4594-80a3-12d0a427b3b3
 @time wavelike(-10.,-1.,-0.);# ∞ speed up!!
@@ -335,7 +336,8 @@ Again, you can switch over to only use a 15 point Gauss quarature for the integr
 begin
 	check = @bind real_only CheckBox(default=false)
 	Fns = @bind Fn Slider(2. .^(-2:1),default=1,show_value=true)
-	md"""Only use 15-point quadratures $check,  U/√g = $Fns,  z $zs"""
+	zs3 = @bind z Slider([-1,-0.1,-0.01,-0.001],default=-0.1,show_value=true)
+	md"""Only use 15-point quadratures $check,  U/√g = $Fns,  z $zs3"""
 end
 
 # ╔═╡ c72cb1e2-42a9-4d4d-82ab-7a608d916b30
@@ -377,11 +379,11 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
 ForwardDiff = "~0.10.36"
-NeumannKelvin = "~0.4.0"
+NeumannKelvin = "~0.4.2"
 Plots = "~1.40.1"
 PlutoUI = "~0.7.58"
-QuadGK = "~2.9.4"
-SpecialFunctions = "~2.3.1"
+QuadGK = "~2.11.1"
+SpecialFunctions = "~2.5.0"
 Statistics = "~1.11.1"
 """
 
@@ -391,7 +393,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.2"
 manifest_format = "2.0"
-project_hash = "0418008ce4c4ddf90c8182d881e934bd6854dd21"
+project_hash = "ae8244ee04623b2a538eda177a3940c71a46a65e"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -894,9 +896,9 @@ weakdeps = ["Dates", "Test"]
     InverseFunctionsTestExt = "Test"
 
 [[deps.IrrationalConstants]]
-git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
+git-tree-sha1 = "e2222959fbc6c19554dc15174c81bf7bf3aa691c"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
-version = "0.2.2"
+version = "0.2.4"
 
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
@@ -1086,9 +1088,9 @@ uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.1.0"
 
 [[deps.MIMEs]]
-git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
+git-tree-sha1 = "1833212fd6f580c20d4291da9c1b4e8a655b128e"
 uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
-version = "0.1.4"
+version = "1.0.0"
 
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "oneTBB_jll"]
@@ -1144,9 +1146,9 @@ version = "2023.12.12"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
-git-tree-sha1 = "fe891aea7ccd23897520db7f16931212454e277e"
+git-tree-sha1 = "cc0a5deefdb12ab3a096f00a6d42133af4560d71"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
-version = "1.1.1"
+version = "1.1.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -1154,9 +1156,9 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "LinearAlgebra", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "ThreadsX", "TypedTables"]
-git-tree-sha1 = "ae9f89af6f613f410a90e1f6d38ef66b587696c0"
+git-tree-sha1 = "020e2effe1f60298b8a1a40adf892015e9f3f0fd"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.4.0"
+version = "0.4.2"
 
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1199,9 +1201,9 @@ uuid = "91d4177d-7536-5919-b921-800302f37372"
 version = "1.3.3+0"
 
 [[deps.OrderedCollections]]
-git-tree-sha1 = "12f1439c4f986bb868acda6ea33ebc78e19b95ad"
+git-tree-sha1 = "cc4054e898b852042d7b503313f7ad03de99c3dd"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "1.7.0"
+version = "1.8.0"
 
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1274,9 +1276,9 @@ version = "1.40.9"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
-git-tree-sha1 = "eba4810d5e6a01f612b948c9fa94f905b49087b0"
+git-tree-sha1 = "7e71a55b87222942f0f9337be62e26b1f103d3e4"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.60"
+version = "0.7.61"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -1326,9 +1328,15 @@ version = "6.7.1+1"
 
 [[deps.QuadGK]]
 deps = ["DataStructures", "LinearAlgebra"]
-git-tree-sha1 = "9b23c31e76e333e6fb4c1595ae6afa74966a729e"
+git-tree-sha1 = "cda3b045cf9ef07a08ad46731f5a3165e56cf3da"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
-version = "2.9.4"
+version = "2.11.1"
+
+    [deps.QuadGK.extensions]
+    QuadGKEnzymeExt = "Enzyme"
+
+    [deps.QuadGK.weakdeps]
+    Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "StyledStrings", "Unicode"]
@@ -1443,9 +1451,9 @@ version = "1.11.0"
 
 [[deps.SpecialFunctions]]
 deps = ["IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
-git-tree-sha1 = "e2cfc4012a19088254b3950b85c3c1d8882d864d"
+git-tree-sha1 = "64cca0c26b4f31ba18f13f6c12af7c85f478cfde"
 uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
-version = "2.3.1"
+version = "2.5.0"
 weakdeps = ["ChainRulesCore"]
 
     [deps.SpecialFunctions.extensions]
@@ -1471,9 +1479,9 @@ version = "1.0.2"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
-git-tree-sha1 = "47091a0340a675c738b1304b58161f3b0839d454"
+git-tree-sha1 = "02c8bd479d26dbeff8a7eb1d77edfc10dacabc01"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.9.10"
+version = "1.9.11"
 weakdeps = ["ChainRulesCore", "Statistics"]
 
     [deps.StaticArrays.extensions]
@@ -1667,9 +1675,9 @@ version = "1.1.42+0"
 
 [[deps.XZ_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "beef98d5aad604d9e7d60b2ece5181f7888e2fd6"
+git-tree-sha1 = "56c6604ec8b2d82cc4cfe01aa03b00426aac7e1f"
 uuid = "ffd25f8a-64ca-5728-b0f7-c24cf3aae800"
-version = "5.6.4+0"
+version = "5.6.4+1"
 
 [[deps.Xorg_libICE_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1887,9 +1895,9 @@ version = "1.18.0+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "d7b5bbf1efbafb5eca466700949625e07533aff2"
+git-tree-sha1 = "055a96774f383318750a1a5e10fd4151f04c29c5"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.45+1"
+version = "1.6.46+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
@@ -1962,7 +1970,7 @@ version = "1.4.1+2"
 # ╟─7898c3e1-6224-4200-9bae-e1d68627c6ab
 # ╟─f4cdf4bc-2bce-4cf8-a8d2-08d4a0659317
 # ╟─36cce729-b4e9-4cfc-b1fe-fc5dc13ac3d1
-# ╟─9f52c359-7a84-4c03-87d8-3b17a5f93f44
+# ╠═9f52c359-7a84-4c03-87d8-3b17a5f93f44
 # ╟─f10b555a-9f57-4d97-99f0-61da8b88496d
 # ╠═23a7e728-7c0f-413e-ac85-0fbbdb5ab67a
 # ╠═2a345247-b3e7-4613-ab8d-9b708314065d
