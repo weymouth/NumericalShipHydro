@@ -18,9 +18,10 @@ end
 
 # ╔═╡ 6aa38485-f860-4834-ac8b-7a7761fa26e0
 begin
-	using NeumannKelvin # new package!
+	using NeumannKelvin 
 	using NeumannKelvin: param_props,∂ₙϕ,φ,∇φ # panel functions
 	using NeumannKelvin: kelvin,source # Greens functions
+	using NeumannKelvin: ζ # free surface
 end
 
 # ╔═╡ 6c9e0bbc-d864-11ee-17bc-6b7763404349
@@ -41,7 +42,7 @@ md"""
 
 # Linear free surface waves and forces
 
-In the last notebook we wrote down the Neumann-Kelvin Greens function. I've coded up that function along with the panel method functions from the sphere notebook into their own package. 
+We can now apply the accelerated Neumann-Kelvin Greens function to the panel method to develop simulate the 3D free-surface potential flow around bodies with forward speed. 
 """
 
 # ╔═╡ 76cbc520-3f93-41de-a7e7-7def53de203e
@@ -104,11 +105,8 @@ $\frac ζL = \left. \text{Fn}^2\frac{\partial\phi}{\partial x}\right|_{z=0}$
 
 > Note that our linearization is only consistent when Fn $\ll 1$ or the depth of the disturbance is such that the amplitude stays small regardless.
 
-This is implemented in the one-liner below.
+This is implemented in a one-liner `NeumannKelvin.ζ`.
 """
-
-# ╔═╡ 8f42d597-b7c6-4df0-a966-8807b74ae551
-ζ(x,y,q,panels;Fn,kwargs...) = Fn^2*derivative(x->φ(SA[x,y,0],q,panels;kwargs...),x)
 
 # ╔═╡ bc0bb478-ddfd-4e13-8758-c5c1150578e9
 md"""
@@ -201,7 +199,7 @@ The biggest difference in the two matrices is below the diagonal.
 
 #### Activity
 
-Recall that $a_{i,j}$ is the influence of panel $j$ on panel $i$. 
+Recall that $a_{ij}$ is the influence of panel $j$ on panel $i$. 
  - What does this mean about the relative positions of the two panels near and below the diagonal?
  - Explain the difference in the matrices physically in terms of the two new terms in `kelvin`.
 
@@ -354,15 +352,11 @@ Finally, lets check how our wave drag force depends on Froude number.
 """
 
 # ╔═╡ dc6bcf00-8191-4168-82de-1cd2d8b4666b
-Fdata = map(0.4:0.05:0.8) do Fn
+map(0.4:0.05:0.8) do Fn
 	panels = submarine(0.1;Z=-1/8,r=1/12)
 	f = solve_force(panels;G=kelvin,Fn)
-	(Fn=Fn,drag=-f[1],lift=f[3])
-end |>Table;
-
-# ╔═╡ f57929d5-ccc3-47aa-b79a-46450a1f7da9
-Plots.scatter(Fdata.Fn,500*Fdata.drag,label = nothing, xlabel="Fn", 
-	ylabel="500 × wave drag coefficient",ylims = (0,3.4), xlims = (0.35,0.85))
+	(Fn=Fn,drag=-f[1])
+end; #this one doesn't actually generate the data - see below:
 
 # ╔═╡ 8d544622-8eb7-4dc5-870e-39ec21f26c70
 md"""
@@ -370,11 +364,52 @@ md"""
 Here is a plot from Baar and Price 1986, for (coincidentally) the same Z/L and r/L ratio. Note that they scaled by $\rho U^2$ instead of $\frac 12 \rho U^2$, so I multiplied by $500$ instead of $10^3$ to compare them.
 ![](https://raw.githubusercontent.com/weymouth/NumericalShipHydro/9349f0512fe3ee3a1164d8e0ef6e8fda71f3899d/Baar_1982_prolate_spheroid.png)
 
-As you can see, our results match the analytic solution extremely well! 
+As you can see, our results match the analytic solution and previous Neumann-Kelvin simulation results extremely well! 
 
-#### Activity
+### Activity
  - Have we validated the linear free surface code?
  - What additional tests should we do?
+"""
+
+# ╔═╡ 2332e602-477e-4bcf-ae4e-2705e357a676
+md"""
+
+## Simulation speed
+
+Depending on the speed of your computer, the code blocks above might have taken a while. 
+
+Despite all the work we put into accelerating the Green's function code, free-surface simulations are still much slower than simulations using `G=source` and they require more panels to resolve the waves.
+
+Compare that to the block below...
+"""
+
+# ╔═╡ e471f1f6-3ee1-4206-bf5d-cfd3880426b9
+Fdata = let
+	panels = submarine(0.1;Z=-1/8,r=1/12) # only make the panels once
+	map(0.4:0.05:0.8) do Fn
+		A = influence(panels;G=kelvin,Fn,d²=0) # ← what are those ↓ ?!?
+		f = steady_force(A\first.(panels.n),panels;G=kelvin,Fn,d²=0)
+		(Fn=Fn,drag=f[1])
+	end|>Table
+end;
+
+# ╔═╡ f57929d5-ccc3-47aa-b79a-46450a1f7da9
+Plots.scatter(Fdata.Fn,500*Fdata.drag,label = nothing, xlabel="Fn", 
+	ylabel="500 × wave drag coefficient",ylims = (0.5,3.25), xlims = (0.35,0.85))
+
+# ╔═╡ f7e6707d-81d1-4c23-9663-f5ff02e76f72
+md"""
+My laptop completes this block 3-4 times faster than the one above. 
+
+### Activity
+
+- What black magic is this? Check the documentation of those functions.
+- Discuss how this acceleration works and what it depends on. 
+
+When running a large parameter sweep like this, make sure to use these special functions when possible.
+
+---
+You can ignore the warning below:
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1977,7 +2012,6 @@ version = "1.4.1+2"
 # ╟─d26bbf92-04dc-4ba5-8782-cc338888b5a7
 # ╟─0ac277f4-27da-410b-a732-13be2f0b9667
 # ╟─a4a18d5d-8af6-445a-9972-58df277c23d6
-# ╠═8f42d597-b7c6-4df0-a966-8807b74ae551
 # ╟─bc0bb478-ddfd-4e13-8758-c5c1150578e9
 # ╠═7c9265d4-0bca-4f50-af24-b4c49fab0280
 # ╟─0a8d54f5-7e04-4fa4-bfa6-209ad3133be9
@@ -2011,6 +2045,9 @@ version = "1.4.1+2"
 # ╠═dc6bcf00-8191-4168-82de-1cd2d8b4666b
 # ╟─f57929d5-ccc3-47aa-b79a-46450a1f7da9
 # ╟─8d544622-8eb7-4dc5-870e-39ec21f26c70
+# ╟─2332e602-477e-4bcf-ae4e-2705e357a676
+# ╠═e471f1f6-3ee1-4206-bf5d-cfd3880426b9
+# ╟─f7e6707d-81d1-4c23-9663-f5ff02e76f72
 # ╟─98242910-e65e-4a00-8ce4-92233be77c3a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
