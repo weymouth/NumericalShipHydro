@@ -165,7 +165,7 @@ These days, AI and [machine learning](https://en.wikipedia.org/wiki/Machine_lear
 To develop a *surrogate model* to approximate the integrals we need to:
  1. Choose a surrogate model type (or "architecture") i.e. a deep neural network
  1. Create/find a data-set of examples 
- 1. Fit the coefficients of the model (also called model "training")
+ 1. Fit the model coefficients to minimize the error (also called model "training")
  1. Check the **generalization error** of the surrogate on examples not included in the training data-set.
 
 |Type 6: Generalization Error|
@@ -306,13 +306,13 @@ The code blocks below demonstrate the resulting `wavelike` function:
 """
 
 # ╔═╡ 2a345247-b3e7-4613-ab8d-9b708314065d
-@time wavelike_cases = [wavelike(x,y,z,-3log(10)) for (x,y,z) in x_cases]; # O(100) × speed-up
+@time wavelike_cases = [wavelike(x,y,z) for (x,y,z) in x_cases]; # O(100) × speed-up
 
 # ╔═╡ 326a691a-3133-414f-9953-a9c8e65eb959
 @time quadgk(T->Wi(-10.,-1.,-1e-3,T),-Inf,Inf); # slow on challenging case
 
 # ╔═╡ 8f72eae3-4589-418a-8049-318d5b671862
-@time for _ in 1:1000; wavelike(-10.,-1.,-1e-3,-3log(10)); end # ~1000 × speed-up
+@time for _ in 1:1000; wavelike(-10.,-1.,-1e-3); end # ~1000 × speed-up
 
 # ╔═╡ 7ea6293c-00f1-4594-80a3-12d0a427b3b3
 @time wavelike(-10.,-1.,-0.);# ∞ speed up!!
