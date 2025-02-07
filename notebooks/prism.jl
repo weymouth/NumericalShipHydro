@@ -16,48 +16,50 @@ macro bind(def, element)
     #! format: on
 end
 
-# ╔═╡ 4e5097c3-66cc-4033-b02f-a08bbaf6c3fe
-begin 
-	using PlutoUI
-	Fnslider = @bind Fn Slider([0.2,0.34,0.57],default=0.34,show_value=true)
-	md"Fn = $Fnslider"
-end
-
 # ╔═╡ 98242910-e65e-4a00-8ce4-92233be77c3a
 begin
-	using CommonMark
 	using NeumannKelvin
 	using Plots
 	using PlotlyJS
 	plotlyjs()
 end;
 
-# ╔═╡ 7c9265d4-0bca-4f50-af24-b4c49fab0280
+# ╔═╡ 691e0946-b6b2-4ad1-80ac-b2241b8ea163
+begin
+	using PlutoUI
+	Fnslider = @bind Fn Slider([0.2,0.34,0.57],default=0.34,show_value=true)
+	G=kelvin
+	centers(panels) = eachrow(stack(panels.x))
+	md"Fn = $Fnslider"
+end
+
+# ╔═╡ 470deb3f-c50a-47f9-9afd-00db32560e8c
+md"""
+# Linear wave pattern and drag of an elliptical hull
+
+This notebook uses the `NeumanKelvin.jl` package to solve for the potential flow around a prismatic hull with an elliptical waterplane.
+"""
+
+# ╔═╡ fc3f3c41-c935-44d5-83f8-4a471dee1c2b
 begin
 	function prism(h;hz=max(0.125,h),AR=0.2,Z=2,r=1.2)
 	    S(θ,z) = SA[0.5cos(θ),AR*0.5sin(θ),z]
 	    dθ = π/round(π*0.5/h)
-		n = round(log(1+Z/hz*(r-1))/log(r)) # geometric growth
+		# geometric growth in z to reduce number of panels
+		n = round(log(1+Z/hz*(r-1))/log(r)) 
 		z,dz = [-hz*(1-r^j)/(1-r) for j in 1:n],[hz*r^(j-1) for j in 1:n]
 		param_props.(S,(dθ:dθ:2π)',z+0.5dz,dθ,dz) |> Table
 	end
-	centers(panels) = eachrow(stack(panels.x))
-	h,AR = 0.1,0.2; panels = prism(h;AR); 
+	h,AR = 0.1,0.2; panels = prism(h;AR) 
+end |> display
 
-	G=kelvin
+# ╔═╡ be3c3330-9ea6-4160-8ba4-db04454a506d
+begin
 	q = influence(panels;G,Fn)\first.(panels.n)
 	cₚ = [1-sum(abs2,SA[-1,0,0]+∇φ(pᵢ.x,q,panels;G,Fn)) for pᵢ in panels]
-	cm"""
-
-	# Linear wave pattern and drag of an elliptical hull
-	
-	This notebook uses the `NeumanKelvin.jl` package to solve for the potential flow around a prismatic hull with an elliptical waterplane defined using  N=$(length(panels)) panels.
-	"""
+	Plots.scatter3d(centers(panels)...,marker_z=cₚ,title="prismatic hull cₚ",
+		label=nothing,aspect_ratio=1.0,size=(650,400),widen=false)
 end
-
-# ╔═╡ 0a8d54f5-7e04-4fa4-bfa6-209ad3133be9
-Plots.scatter3d(centers(panels)...,marker_z=cₚ,title="prismatic hull cₚ",
-	label=nothing,aspect_ratio=1.0,size=(650,400),widen=false)
 
 # ╔═╡ 62a42592-ec94-4d1a-8634-4e82d460185e
 md"""
@@ -68,25 +70,35 @@ We can further explain and investigate this behaviour using the free surface ele
 The Kelvin wake pattern has the expected angle of around 19.5 degrees regardless of $\text{Fn}$, however the relative strength of the transverse and divergent wakes depend strongly on $\text{Fn}$.
 """
 
+# ╔═╡ 353a8465-491d-478a-a309-a793aae78cd3
+function ellipse_waterline(AR,q,panels,Fn;label=nothing)
+	y(x) = 0.5AR*√(1-(x/0.5)^2)            # get the width of the ellipse
+	zeta(x) = Fn^2*ζ(x,y(x),q,panels;G,Fn) # sample ζ on along waterline
+	Plots.plot!(-0.5:0.01:0.5,zeta;label)  # add to plot with optional label
+end;
+
 # ╔═╡ 8e401bd8-f715-4e90-9ffd-97b8026fa801
-let
-	θ = 0:pi/100:pi
-	x(θ) = 0.5cos(θ)
-	y(θ) = 0.5AR*sin(θ)
-	zeta(θ) = Fn^2*ζ(x(θ),y(θ),q,panels;G,Fn)
-	Plots.plot(x.(θ),zeta.(θ),label="",xlabel="x/L",ylabel="ζ/L")
-end
+Plots.plot(xlabel="x/L",ylabel="ζ/L",
+	title="Hull waterline");ellipse_waterline(AR,q,panels,Fn)
 
 # ╔═╡ 22983a28-b238-444f-a935-ec98b204048e
-begin
-	Plots.surface(range(-6,2,100),range(-4,4,100),(x,y)->ζ(x,y,q,panels;G,Fn)*Fn^2,colorbartitle="ζ/L",c=:balance,zlim=(-1,1))
-end
+Plots.surface(range(-6,2,100),range(-4,4,100),(x,y)->ζ(x,y,q,panels;G,Fn)*Fn^2,
+	colorbartitle="ζ/L",c=:balance,zlim=(-1,1))
 
 # ╔═╡ da473b05-b5ff-4685-8748-d767065caf3e
 md"""
 ## Wave drag
 
-Below, we sweep through different Froude numbers to predict the variation in the wave making drag. As you can see, the response is more complex than for the submerged spheroid because the waves along the hull positively or negatively superimpose their influence as we change the wavelength. Also shown below is a semi-analytic solution due to Guevel 1974. (The two lines are with/without an extra waterline integral - we should match the dashed line.)
+Below, we sweep through different Froude numbers to predict the variation in the wave making drag. As you can see, the response is more complex than for the submerged spheroid because the waves along the hull positively or negatively superimpose their influence as we change the wavelength. 
+
+Also shown below is an analytic series solution due to Guevel 1974 for a semi-infinite elliptical hull. The solid line includes a higher-order contribution compared to the dashed. Like Baar, Guevel is missing the ½ in his pressure scaling, so I've plotted ½$C_w$.
+
+### Activity
+
+ - Where is the descrepancy between the two analytic results largest? How do our results compare to the analytic solutions? 
+ - How do these $C_w$ magnitudes compare to those of the submarine in the previous notebook?
+ - What modelling simplification is critical for *all* the results and might the resulting error line-up with the spread in these solutions?
+
 """
 
 # ╔═╡ 4de0364c-2a41-4326-9130-c6ca835ca540
@@ -96,45 +108,68 @@ Fn_sweep = map(logrange(0.2,0.6,40)) do Fn
 end|> Table;
 
 # ╔═╡ 7f14e714-0a6a-4b0c-b006-5abf0e405d2b
-Plots.plot(Fn_sweep.Fn,Fn_sweep.Cw,ylims=(0,Inf),label=nothing,
-	title="elliptical prism wavemaking drag",xlabel="Fn",ylabel="Cw")
+Plots.plot(Fn_sweep.Fn,Fn_sweep.Cw/2,label=nothing,ylims=(0,0.05),xlims=(0.2,0.605),
+	title="elliptical prism wavemaking drag",xlabel="Fn",ylabel="½Cw") 
 
 # ╔═╡ 241fd47f-8017-4a07-a0de-55d1c564af1e
 md"""
-![](https://raw.githubusercontent.com/weymouth/NumericalShipHydro/9349f0512fe3ee3a1164d8e0ef6e8fda71f3899d/Baar_1982_prolate_spheroid.png)
+![](https://raw.githubusercontent.com/weymouth/NumericalShipHydro/refs/heads/main/ellipse%20resistance/Guevel1987.png)
 
 ## Panel depth sensitivity
 
-This all looks great - indicating there is **no important change** when we consider ships. But there **is** a big difference: 
+This all worked without any change to the method used in the previous notebook. But there **is** a big difference when we compare ships to submarines:
 
 > A ship is a _surface piercing body_ so some of the cells touch the free surface. The depth of these cells is therefore $z \approx 0$.
 
-Below, I reduce the vertical spacing $h_z$ of the panels - but instead of converging, the force diverges! 
-
-### Activity
- - Suggest a few possible reasons why the code may be diverging as $h_z\rightarrow 0$.
- - Test your theory by making a change to the code!
+Below, I reduce the vertical spacing $h_z$ of the panels - but instead of converging, the waterline profiles become very noisey and diverge! **Not great!**
 """
 
 # ╔═╡ 5607cd30-f9ca-43a4-8abc-bfb8120f4555
-map(logrange(0.2,0.0125,5)) do hz # change the z spacing at the waterline
-	Fn = 0.2; h = 0.1
-	panels = prism(h;hz)
-	q = influence(panels;G,Fn)\first.(panels.n)
-	(hz=hz,Cw=steady_force(q,panels;G,Fn)[1])
-end |> Table |> display
+let
+	plt = Plots.plot(xlabel="x/L",ylabel="ζ/L",title="vertical spacing study")
+	for hz in logrange(0.5,0.5^5,5)
+		Fn = 0.2; h = 0.1
+		panels = prism(h;hz,AR)
+		q = influence(panels;G,Fn)\first.(panels.n)
+		ellipse_waterline(AR,q,panels,Fn,label=hz)
+	end; plt
+end
+
+# ╔═╡ b3e41140-a767-4c3e-871d-7c27b5aad953
+md"""
+
+Why is this happening? 
+
+Below, I've computed the self-influence $\partial_n\phi$ (the diagonal of `A`) and plotted the range of those values (max-min) across the panels. This range is zero for the source Green's function (since the self influence is always $2π$), but this range explodes for low Froude numbers and small vertical spacing. 
+
+The self-influence near the free surface is overwhelmed by the Green's function, leading to instability.
+
+"""
+
+# ╔═╡ 8a9abcbf-1d07-4c88-8a39-b3e2f78a7c5e
+Plots.plot(-1:0.01:1,x->NeumannKelvin.nearfield(x,0.,-1.))
+
+# ╔═╡ 11c512e8-d28e-45f6-9df0-ec9fe2fcd4ae
+let
+	dz = 0.01
+	Fn = 0.15
+	self(p) = derivative(0.) do t
+		ξ,α = p.x+t*p.n,NeumannKelvin.reflect(p.x)
+		x,y,z = (ξ-α)/Fn^2
+	    NeumannKelvin.nearfield(x,y,z)/Fn^2
+	end
+	self((x=SA[0,0,-0.5dz],n=SA[1,0,0]))-self((x=SA[0,0,-0.5dz],n=SA[-1,0,0]))
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-CommonMark = "a80b9123-70ca-4bc0-993e-6e3bcb318db6"
 NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
 PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
-CommonMark = "~0.8.15"
 NeumannKelvin = "~0.4.3"
 PlotlyJS = "~0.18.14"
 Plots = "~1.40.1"
@@ -147,7 +182,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.2"
 manifest_format = "2.0"
-project_hash = "837a0acafd922056674c30701b63f65abdd27eb6"
+project_hash = "180673b33a4d894a05fccbb7b23e4cb7dff34d94"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -328,12 +363,6 @@ git-tree-sha1 = "64e15186f0aa277e174aa81798f7eb8598e0157e"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.13.0"
 
-[[deps.CommonMark]]
-deps = ["Crayons", "PrecompileTools"]
-git-tree-sha1 = "3faae67b8899797592335832fccf4b3c80bb04fa"
-uuid = "a80b9123-70ca-4bc0-993e-6e3bcb318db6"
-version = "0.8.15"
-
 [[deps.CommonSolve]]
 git-tree-sha1 = "0eee5eb66b1cf62cd6ad1b460238e60e4b09400c"
 uuid = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
@@ -394,11 +423,6 @@ version = "1.5.8"
 git-tree-sha1 = "439e35b0b36e2e5881738abc8857bd92ad6ff9a8"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.3"
-
-[[deps.Crayons]]
-git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
-uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
-version = "4.1.1"
 
 [[deps.DataAPI]]
 git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
@@ -1835,17 +1859,22 @@ version = "1.4.1+2"
 """
 
 # ╔═╡ Cell order:
-# ╟─7c9265d4-0bca-4f50-af24-b4c49fab0280
-# ╟─4e5097c3-66cc-4033-b02f-a08bbaf6c3fe
-# ╟─0a8d54f5-7e04-4fa4-bfa6-209ad3133be9
+# ╟─470deb3f-c50a-47f9-9afd-00db32560e8c
+# ╠═fc3f3c41-c935-44d5-83f8-4a471dee1c2b
+# ╟─691e0946-b6b2-4ad1-80ac-b2241b8ea163
+# ╠═be3c3330-9ea6-4160-8ba4-db04454a506d
 # ╟─62a42592-ec94-4d1a-8634-4e82d460185e
 # ╟─8e401bd8-f715-4e90-9ffd-97b8026fa801
+# ╠═353a8465-491d-478a-a309-a793aae78cd3
 # ╟─22983a28-b238-444f-a935-ec98b204048e
 # ╟─da473b05-b5ff-4685-8748-d767065caf3e
 # ╠═4de0364c-2a41-4326-9130-c6ca835ca540
 # ╟─7f14e714-0a6a-4b0c-b006-5abf0e405d2b
 # ╟─241fd47f-8017-4a07-a0de-55d1c564af1e
 # ╠═5607cd30-f9ca-43a4-8abc-bfb8120f4555
+# ╟─b3e41140-a767-4c3e-871d-7c27b5aad953
+# ╠═8a9abcbf-1d07-4c88-8a39-b3e2f78a7c5e
+# ╠═11c512e8-d28e-45f6-9df0-ec9fe2fcd4ae
 # ╟─98242910-e65e-4a00-8ce4-92233be77c3a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
