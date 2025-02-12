@@ -177,7 +177,7 @@ As we have said many times in this class, you need to both understand your probl
  - There are only three inputs $x,y,z$ which means a tool like deep-learning is completely overkill. Let's avoid all their set-up and training issues and focus on polynomial interpolation methods.
  - We can sample the data at any $\vec x$ values we want using `quadgk`. Therefore we should use Chebyshev polynomials which have the smallest possible generalization error when sampled at [special points](https://en.wikipedia.org/wiki/Chebyshev_nodes) (akin to Gauss-quadrature).
 
-This method was first proposed by Newman in 1987, and works so well that basically everyone has simply copied his tables of coefficients ever since. However, *copying tables by hand is prone to human error* (I'm amazed I have to say this) and we can recreate the method using the package `FastChebInterp.jl` in [around 30 lines of code](https://github.com/weymouth/NeumannKelvin.jl/blob/e86254c9e50644883ece1bdd93b2f6d6c9bfb127/src/green.jl#L25). Let's try it out!
+This method was first proposed by Newman in 1987, and works so well that basically everyone has simply copied his tables of coefficients ever since. However, *copying tables by hand is prone to human error* (I'm amazed I have to say this) and we can recreate the method using the package [`FastChebInterp.jl`](https://github.com/JuliaMath/FastChebInterp.jl). Let's try it out!
 """
 
 # ╔═╡ cd454cb4-e46e-4355-9326-5977a8d03c9d
@@ -214,9 +214,7 @@ That takes care of $N$, but we need to accelerate $W$ as well...
 
 ### 3a. Stationary Phase
 
-The integrand $W_i = \exp(z(1+T^2))\sin(ψ(T))$ eventually goes to zero as $T\rightarrow \pm\infty$ since $z$ is negative. However, this drop off happens slower and slower as $z\rightarrow 0$, meaning there are more and more waves inside the envelop that we need to sample to estimate the integral accurately. 
-
-Despite this, the *integral* remains bounded as $z\rightarrow 0$. Why? Because when the phase $\psi$ is rapidly changing, the waves are thin and nearly constant amplitude, meaning their integral is almost zero. Only the regions where $\psi'\approx 0$ (where the phase is "stationary") make a significant contribution to the integral. 
+The integrand $W_i=\exp(z(1+T^2))\sin(ψ(T))$ dies out very slowly if $z\rightarrow 0$, making it very hard for `quadgk` to resolve all the waves. However, **the contribution of most of the waves cancel out!** Only the regions where $\psi'\approx 0$ (where the phase is "stationary") make a significant contribution to the integral. 
 
 This comes up in wave analysis all the time, and the method of Stationary Phase was developed by [Lord Kelvin](https://en.wikipedia.org/wiki/Lord_Kelvin) in the late 1800s to approximate such integrals. Here's a [physics video](https://www.youtube.com/watch?v=-UgQEHHXTRM) where stationary phase is used to derive the group velocity of a wave. 
 
@@ -293,14 +291,13 @@ end
 md"""
 ### 3c. Numerical *Nearly*-Stationary Phase
 
-The example above is great, but...
-1. We can't solve for the path $h(p)$ analytically for any $y \ne 0$. 
-2. We can't use use this approach near a stationary point when the integral **isn't** highly oscillatory (say when $z\le-R$) or when the two stationary points start to merge as $y/x\rightarrow\sqrt{1/8}$. 
-3. And what should we do when $T_0$ becomes complex for $y/x>\sqrt{1/8}$?
+The example above show this works great on the centerline, but this method has never been robustly applied to the general wavelike integral...until now. 
 
-#2 is the really hard one, but in 2024 (finally a modern contribution!) Gibbs & Huybrechs developed a robust solution by integrating using Gauss-Legendre within a *finite* phase-change radius of the stationary points and using the stationary phase paths outside that radius. In `NeumannKelvin.jl` I use $\Re(T_0)$ to force the stationary points on the real-line (solving #3) and use the `Roots.jl` package both to find the finite range around these points (simplifying #2) and to find the approximate complex paths from the range end points to infinity (solving #1).
+Gibbs & Huybrechs developed a robust version of stationary phase integration in 2024 (finally a modern contribution!). Their approach was to use Gauss-Legendre within a *finite* phase-change radius of the stationary points and use the stationary phase paths outside that radius. 
 
-The code blocks below demonstrate the resulting `wavelike` function:
+Their paper was limited to polynomial phase function, so our $\psi=(x+|y|T)\sqrt{1+T^2}$ doesn't automatically work. In `NeumannKelvin.jl`, I side-step this numerically, using the `Roots.jl` package both to find the finite range around the stationary points and to find the approximate complex paths from the range end points to infinity. 
+
+I'm chatting with Gibbs and his new PhD student to see if this is worth publishing or can be further improved, but there is no doubt it works! The code blocks below demonstrate the resulting `wavelike` function:
  - It is $O(100)$ times faster than `quadgk` over `x_cases`, with increasing speed-up as $z\rightarrow -0$.
  - It maintains high accuracy and a constant computational cost across all the $x,y,z$ values!
 """
@@ -1970,7 +1967,7 @@ version = "1.4.1+2"
 # ╟─7898c3e1-6224-4200-9bae-e1d68627c6ab
 # ╟─f4cdf4bc-2bce-4cf8-a8d2-08d4a0659317
 # ╟─36cce729-b4e9-4cfc-b1fe-fc5dc13ac3d1
-# ╠═9f52c359-7a84-4c03-87d8-3b17a5f93f44
+# ╟─9f52c359-7a84-4c03-87d8-3b17a5f93f44
 # ╟─f10b555a-9f57-4d97-99f0-61da8b88496d
 # ╠═23a7e728-7c0f-413e-ac85-0fbbdb5ab67a
 # ╠═2a345247-b3e7-4613-ab8d-9b708314065d
