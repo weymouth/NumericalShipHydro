@@ -18,10 +18,15 @@ end
 
 # ╔═╡ 6aa38485-f860-4834-ac8b-7a7761fa26e0
 begin
-	using NeumannKelvin 
-	using NeumannKelvin: param_props,∂ₙϕ,φ,∇φ # panel functions
-	using NeumannKelvin: kelvin,source # Greens functions
+	using NeumannKelvin # make sure this is v.0.5+
+	using NeumannKelvin: kelvin,source,∫G,reflect
 	using NeumannKelvin: ζ # free surface
+
+	# Neumann-Kelvin Greens function
+	G_NK(ξ,α;Fn) = source(ξ,α)-source(ξ,reflect(α))+kelvin(ξ,reflect(α);Fn)
+
+	# cell-center quadrature over the panel
+	∫kelvin(x,p;d²=0,Fn) = ∫G(x,p;d²)-∫G(x,reflect(p);d²) +p.dA*kelvin(x,reflect(p.x);Fn)
 end
 
 # ╔═╡ 6c9e0bbc-d864-11ee-17bc-6b7763404349
@@ -43,13 +48,16 @@ md"""
 # Linear free surface waves and forces
 
 We can now apply the accelerated Neumann-Kelvin Greens function to the panel method to develop simulate the 3D free-surface potential flow around bodies with forward speed. 
-"""
 
-# ╔═╡ 76cbc520-3f93-41de-a7e7-7def53de203e
-md"""
 ## Point source test
 
-Let's test the `kelvin` function by placing a source at $a=[0,0,Z]$ moving with Froude number $\text(Fn)$ and plotting the full potential and surface elevation.
+Let's test the `kelvin` function by placing a source at $a=[0,0,Z]$ moving with Froude number $\text(Fn)$ and plotting the full potential and surface elevation. The total Neumann-Kelvin Greens function is:
+
+$G_{NK}(ξ,α) = \text{source}(ξ,α)-\text{source}(ξ,α')+\text{kelvin}(ξ,α')$
+
+where $\alpha'$ is the source location reflected across $z=0$ and `kelvin` combines the contributions of the `nearfield` and `wavelike` functions. The panel potential is then $\phi=∫ₚG_{NK}$ is then approximated by a cell-center quadrature.
+
+The plot below show the combined contribution for a submerged source.
 """
 
 # ╔═╡ d26bbf92-04dc-4ba5-8782-cc338888b5a7
@@ -66,9 +74,8 @@ function plot_surface(f;normalize=false,
 end
 
 # ╔═╡ 06de07d4-003f-4f41-b10d-a4e3c12e3beb
-begin
-	ξ(x,y) = SA[x,y,0]; a=SA[0,0,Zp]
-	G(x,y) = source(ξ(x,y),a)+kelvin(ξ(x,y),-a,Fn=Fnp)
+let
+	G(x,y) = G_NK(SA[x,y,0],SA[0,0,Zp],Fn=Fnp)
 	if show_green
 		plot_surface(G,normalize=true,c=:delta,
 			colorbartitle="G/max(G)",title="Point source at Z=$Zp, Fn=$Fnp")
@@ -112,80 +119,81 @@ This is implemented in a one-liner `NeumannKelvin.ζ`.
 md"""
 ## Prolate spheroid submarine
 
-Remarkably, our panel method from before will work _without alteration_ other than swapping `G=source` to `G=kelvin`. Let's test that out on a mathematically idealized submarine.
+Remarkably, our panel method from before will work _without alteration_ other than using the `∫kelvin` potential defined above instead of `∫G`. Let's test that out on a mathematically idealized submarine.
 
-We've already seen the parametric equation for a spheroid and how to generate panels from it. I've add a vertical offset to make sure the panels are all below the $z=0$ free surface to avoid the bug above.
+We've already seen the parametric equation for a spheroid and how to generate panels from it. I've just added a parameter `Z` to set the submergence.
 """
 
 # ╔═╡ 7c9265d4-0bca-4f50-af24-b4c49fab0280
 begin
 	function submarine(h;Z=-0.5,L=1,r=0.25)
 	    S(θ₁,θ₂) = SA[0.5L*cos(θ₁),r*cos(θ₂)*sin(θ₁),r*sin(θ₂)*sin(θ₁)+Z]
-	    dθ₁ = π/round(π*0.5L/h) # cosine sampling increases density at ends 
+	    dθ₁ = π/round(π*0.5L/h) 
 	    mapreduce(vcat,0.5dθ₁:dθ₁:π) do θ₁
-	        dθ₂ = π/round(π*0.25L*sin(θ₁)/h) # polar step size at this azimuth
+	        dθ₂ = π/max(2,round(π*0.25L*sin(θ₁)/h)) # set polar angle step
 	        param_props.(S,θ₁,0.5dθ₂:dθ₂:2π,dθ₁,dθ₂)
 	    end |> Table
 	end
 	centers(panels) = eachrow(stack(panels.x))
-	h = 0.15; Z=-0.3; panels = submarine(h;Z); N = length(panels)
-	md"""Number of panels N = $N"""
+	h = 0.1; Z=-0.3; panels = submarine(h;Z); N = length(panels)
+	md"""Number of panels N = $N, min(dA/h²) = $(round(minimum(panels.dA)/h^2,digits=3))"""
 end
 
 # ╔═╡ 0a8d54f5-7e04-4fa4-bfa6-209ad3133be9
 Plots.scatter3d(centers(panels)...,marker_z=panels.dA/h^2,
-	label=nothing,colortitle="dA/h²")
+	label=nothing,colortitle="dA/h²",clims=(0,1))
 
 # ╔═╡ 5396139c-4bdd-4634-a3c6-c83845f514dc
-begin
-	H(θ₁,r_R) = (2*(r_R^2)+(1-r_R^2)*cos(θ₁)^2)/(r_R^2+(1-r_R^2)*cos(θ₁)^2)^(1.5)
-	md"""
-	The color of each dot is dA/h² for the panel, which drops to less than 0.5 at the poles. The ratio of the mean curvature (H=0.5∇⋅n) for this prolate spheroid at the equator vs the poles is $(H(0,0.5)/H(π/2,0.5)), so even more refinement near the poles would probably be good."""
-end
+md"""
+The color of each dot is dA/h² for the panel, which drops to 0.2 at the poles. Since the curvature is stronger at the poles than the midbody, this extra resolution could be useful.
+"""
 
 # ╔═╡ 416fde17-16ba-4a29-a910-7f9609243bfd
 md"""
-## Comparing `source` to `kelvin`
+## Comparing `ϕ=∫G` to `ϕ=∫kelvin`
 
 Now that we have a set of panels below $z=0$ we can use our panel method to solve for the flow. 
 
-Lets start by using the simple `G=source`, and looking at the velocity on the $z=0$ plane.
+Lets start by looking at the velocity on the $z=0$ plane when using source panels.
 """
 
 # ╔═╡ 345b1774-b323-4b48-99d5-2911f25acdde
 begin
-	Aˢ = ∂ₙϕ.(panels,panels',G=source) # source only!
+	Aˢ = ∂ₙϕ.(panels,panels',ϕ=∫G) # source-panel only!
 	b = first.(panels.n)
 	qˢ = Aˢ \ b; @assert Aˢ*qˢ ≈ b
 end
 
 # ╔═╡ ab41acd9-56a5-4296-b77a-901584a456bb
-plot_surface((x,y)->-derivative(x->φ([x,y,0],qˢ,panels),x),colorbartitle="u(z=0)/U")
+plot_surface((x,y)->ζ(x,y,qˢ,panels),colorbartitle="u(z=0)/U")
 
 # ╔═╡ 9026388a-2b0e-41f3-8bcc-a62aaec6fd5b
 md"""
 Notice that even though the body is very close, the flow on the $z=0$ plane is almost uneffected. Only a 16% disturbance in the flow speed. Also notice that the disturbance is symmetric, both in y and x.
 
-Ok - now let's swap the Greens function!
+Ok - now let's swap the panel potential!
 """
 
 # ╔═╡ e096e3c7-85ad-49b2-b640-7aea706ca07a
 begin
-	Fn = 0.5 # submarine Froude number
-	Aᵏ = ∂ₙϕ.(panels,panels';G=kelvin,Fn) # Use G=kelvin(x,a;Fn)!
+	Fn = 0.5 # U/√gl where l=1
+	Aᵏ = ∂ₙϕ.(panels,panels';ϕ=∫kelvin,Fn) # Neumman-Kelvin panels
 	qᵏ = Aᵏ \ b; @assert Aᵏ*qᵏ ≈ b
 end
+
+# ╔═╡ 0c377b95-ec26-4364-b717-bc0fd1230681
+begin
+	using NeumannKelvin:∇Φ #gradient of the total potential
+	u²(x,q,panels;kwargs...) = sum(abs2,SA[-1,0,0]+∇Φ(x,q,panels;kwargs...))
+	cₚᵏ = map(x->1-u²(x,qᵏ,panels;ϕ=∫kelvin,Fn),panels.x)
+end;
 
 # ╔═╡ c5f6043c-9c38-4e42-a680-10980455421d
 md"""
 
 And just like that, it's solved.
 
-## Safety checks
-
-As always, we should check what we just did by looking at the new inputs and doing some basic safety checks on the outputs. 
-
-First, let's compare the source vs kelvin influence matrices.
+Before looking at the results, let's do a safety check by comparing the source vs kelvin influence matrices.
 """
 
 # ╔═╡ 4356d45d-e29f-4adf-848a-ff74a65bec45
@@ -201,14 +209,14 @@ The biggest difference in the two matrices is below the diagonal.
 
 Recall that $a_{ij}$ is the influence of panel $j$ on panel $i$. 
  - What does this mean about the relative positions of the two panels near and below the diagonal?
- - Explain the difference in the matrices physically in terms of the two new terms in `kelvin`.
+ - Explain the difference in the matrices physically in terms of the `nearfield` and `wavelike` contributions in `∫kelvin`.
 
 
 Now let's look at the wave field
 """
 
 # ╔═╡ ec703fbe-1b84-4d12-b65c-19bddd3035c4
-plot_surface((x,y)->ζ(x,y,qᵏ,panels;G=kelvin,Fn),colorbartitle="ζ/L",c=:balance)
+plot_surface((x,y)->ζ(x,y,qᵏ,panels;ϕ=∫kelvin,Fn),colorbartitle="ζ/L",c=:balance)
 
 # ╔═╡ c04b8e03-221e-4d89-829d-9de5926ce886
 md"""
@@ -253,14 +261,8 @@ The volume of a prolate spheroid is $\frac 43 \pi r^2 R$, and I've used $R=\frac
 Next, we'll get the dynamic pressure coefficient on all the panels.
 """
 
-# ╔═╡ 0c377b95-ec26-4364-b717-bc0fd1230681
-begin
-	u²(x,q,panels;kwargs...) = sum(abs2,SA[-1,0,0]+∇φ(x,q,panels;kwargs...))
-	cₚᵏ = map(x->1-u²(x,qᵏ,panels;G=kelvin,Fn),panels.x)
-end;
-
 # ╔═╡ abf31c5c-fb8b-4e5b-8efd-6f419dd3e54e
-Plots.scatter3d(centers(panels)...,marker_z=cₚᵏ,label=nothing,clims=(-1,1))
+Plots.scatter3d(centers(panels)...,marker_z=cₚᵏ,label=nothing,clims=(-Inf,1))
 
 # ╔═╡ ba240bc6-b242-4f94-87df-a14435645490
 md"""
@@ -280,7 +282,7 @@ Finally, we can integrate to give the total dynamic force coefficient.
 force(q,panels;kwargs...) = sum(panels) do pᵢ
 	cₚ = 1-u²(pᵢ.x,q,panels;kwargs...)
 	-cₚ*pᵢ.n*pᵢ.dA
-end; force(qˢ,panels;G=source) # should be zero(3)
+end; force(qˢ,panels;ϕ=∫G) # should be zero(3)
 
 # ╔═╡ 33e52b91-2ff4-4458-9a60-cf25e6f4ac4d
 md"""
@@ -290,7 +292,7 @@ However, switching to `G=kelvin` gives... a non-zero force in x! And z?
 """
 
 # ╔═╡ 5cb366a0-b382-4b8c-8763-77d314973a43
-force(qᵏ,panels;G=kelvin,Fn) 
+force(qᵏ,panels;ϕ=∫kelvin,Fn) 
 
 # ╔═╡ 24b16416-e74a-4ad2-b694-738159dae75c
 md"""
@@ -314,14 +316,13 @@ Let's generate a function to solve for `q` & compute the wave forces given a set
 
 # ╔═╡ 43d7ade0-190c-4ca5-a9ec-2ddc7559e087
 function solve_force(panels;kwargs...)
-	A,b = ∂ₙϕ.(panels,panels';kwargs...,d²=0),first.(panels.n)
-	q = A\b; @assert A*q ≈ b
+	q = ∂ₙϕ.(panels,panels';kwargs...)\first.(panels.n)
 	force(q,panels;kwargs...)
 end
 
 # ╔═╡ 0754f8f6-e8fb-43ac-8785-d0cf09819073
 md"""
-Note that the hard work is done in defining the functions like `kelvin` `submarine` and `force`. This `solve_force` function is easy.
+Note that the hard work is already done in defining the functions like `∫kelvin` `submarine` and `force`. This `solve_force` function is easy.
 
 Let's start by using this function to test our force convergence as the panel size reduces. 
 
@@ -331,7 +332,7 @@ Let's start by using this function to test our force convergence as the panel si
 # ╔═╡ 3b2d70f4-3e7e-43f8-958a-39bf348b8b00
 data = map(4:8) do i 
 	panels = submarine(√0.5^i;Z=-1/8,r=1/12)
-	f = solve_force(panels;G=kelvin,Fn = 0.5)
+	f = solve_force(panels;ϕ=∫kelvin,Fn = 0.5)
 	(N=length(panels),drag=-f[1],lift=f[3])
 end |>Table;
 
@@ -354,7 +355,7 @@ Finally, lets check how our wave drag force depends on Froude number.
 # ╔═╡ dc6bcf00-8191-4168-82de-1cd2d8b4666b
 map(0.4:0.05:0.8) do Fn
 	panels = submarine(0.1;Z=-1/8,r=1/12)
-	f = solve_force(panels;G=kelvin,Fn)
+	f = solve_force(panels;ϕ=∫kelvin,Fn)
 	(Fn=Fn,drag=-f[1])
 end; #this one doesn't actually generate the data - see below:
 
@@ -378,7 +379,7 @@ md"""
 
 Depending on the speed of your computer, the code blocks above might have taken a while. 
 
-Despite all the work we put into accelerating the Green's function code, free-surface simulations are still much slower than simulations using `G=source` and they require more panels to resolve the waves.
+Despite all the work we put into accelerating the Green's function code, free-surface simulations are still much slower than simulations source panels and they require more panels to resolve the waves.
 
 Compare that to the block below...
 """
@@ -387,8 +388,8 @@ Compare that to the block below...
 Fdata = let
 	panels = submarine(0.1;Z=-1/8,r=1/12) # only make the panels once
 	map(0.4:0.05:0.8) do Fn
-		A = influence(panels;G=kelvin,Fn,d²=0) # ← what are those ↓ ?!?
-		f = steady_force(A\first.(panels.n),panels;G=kelvin,Fn,d²=0)
+		A = influence(panels;ϕ=∫kelvin,Fn) # ← ↓ what are those?!?
+		f = steady_force(A\first.(panels.n),panels;ϕ=∫kelvin,Fn)
 		(Fn=Fn,drag=f[1])
 	end|>Table
 end;
@@ -421,7 +422,7 @@ Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
-NeumannKelvin = "~0.4.0"
+NeumannKelvin = "~0.5.0"
 PlotlyBase = "~0.8.19"
 Plots = "~1.40.1"
 PlutoUI = "~0.7.58"
@@ -433,7 +434,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.2"
 manifest_format = "2.0"
-project_hash = "6a2cb4d566d2054078fdd6727b74c202fd5a2994"
+project_hash = "7b659692f2a651364224047aebdfddccb96e3ceb"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -543,10 +544,10 @@ uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
 version = "0.1.9"
 
 [[deps.Bzip2_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "8873e196c2eb87962a2048b3b8e08946535864a1"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "1b96ea4a01afe0ea4090c5c8039690672dd13f2e"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+4"
+version = "1.0.9+0"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -566,15 +567,15 @@ weakdeps = ["SparseArrays"]
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
-git-tree-sha1 = "bce6804e5e6044c6daab27bb533d1295e4a2e759"
+git-tree-sha1 = "962834c22b66e32aa10f7611c08c8ca4e20749a9"
 uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
-version = "0.7.6"
+version = "0.7.8"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
-git-tree-sha1 = "26ec26c98ae1453c692efded2b17e15125a5bea1"
+git-tree-sha1 = "403f2d8e209681fcbd9468a8514efff3ea08452e"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.28.0"
+version = "3.29.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -635,9 +636,9 @@ weakdeps = ["InverseFunctions"]
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
-git-tree-sha1 = "f36e5e8fdffcb5646ea5da81495a5a7566005127"
+git-tree-sha1 = "d9d26935a0bcffc87d2613ce14c527c99fc543fd"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
-version = "2.4.3"
+version = "2.5.0"
 
 [[deps.ConstructionBase]]
 git-tree-sha1 = "76219f1ed5771adbb096743bff43fb5fdd4c1157"
@@ -699,9 +700,9 @@ version = "1.9.1"
 
 [[deps.Dictionaries]]
 deps = ["Indexing", "Random", "Serialization"]
-git-tree-sha1 = "61ab242274c0d44412d8eab38942a49aa46de9d0"
+git-tree-sha1 = "1cdab237b6e0d0960d5dcbd2c0ebfa15fa6573d9"
 uuid = "85a47980-9c8c-11e8-2b9f-f7ca1fa99fb4"
-version = "0.4.3"
+version = "0.4.4"
 
 [[deps.DiffResults]]
 deps = ["StaticArraysCore"]
@@ -745,9 +746,9 @@ version = "0.1.11"
 
 [[deps.Expat_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "e51db81749b0777b2147fbe7b783ee79045b8e99"
+git-tree-sha1 = "d55dffd9ae73ff72f1c0482454dcf2ec6c6c4a63"
 uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
-version = "2.6.4+3"
+version = "2.6.5+0"
 
 [[deps.FFMPEG]]
 deps = ["FFMPEG_jll"]
@@ -936,9 +937,9 @@ weakdeps = ["Dates", "Test"]
     InverseFunctionsTestExt = "Test"
 
 [[deps.IrrationalConstants]]
-git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
+git-tree-sha1 = "e2222959fbc6c19554dc15174c81bf7bf3aa691c"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
-version = "0.2.2"
+version = "0.2.4"
 
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
@@ -1000,9 +1001,9 @@ version = "1.4.0"
 
 [[deps.Latexify]]
 deps = ["Format", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Requires"]
-git-tree-sha1 = "ce5f5621cac23a86011836badfedf664a612cee4"
+git-tree-sha1 = "cd714447457c660382fe634710fb56eb255ee42e"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
-version = "0.16.5"
+version = "0.16.6"
 
     [deps.Latexify.extensions]
     DataFramesExt = "DataFrames"
@@ -1186,9 +1187,9 @@ version = "2023.12.12"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
-git-tree-sha1 = "fe891aea7ccd23897520db7f16931212454e277e"
+git-tree-sha1 = "cc0a5deefdb12ab3a096f00a6d42133af4560d71"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
-version = "1.1.1"
+version = "1.1.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -1196,9 +1197,9 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "LinearAlgebra", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "ThreadsX", "TypedTables"]
-git-tree-sha1 = "ae9f89af6f613f410a90e1f6d38ef66b587696c0"
+git-tree-sha1 = "42ac6e54fc9d4b1262711c5dcfbdb1f3fb21aa11"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.4.0"
+version = "0.5.0"
 
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1224,9 +1225,9 @@ version = "1.4.3"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "7493f61f55a6cce7325f197443aa80d32554ba10"
+git-tree-sha1 = "a9697f1d06cc3eb3fb3ad49cc67f2cfabaac31ea"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.0.15+3"
+version = "3.0.16+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -1241,9 +1242,9 @@ uuid = "91d4177d-7536-5919-b921-800302f37372"
 version = "1.3.3+0"
 
 [[deps.OrderedCollections]]
-git-tree-sha1 = "12f1439c4f986bb868acda6ea33ebc78e19b95ad"
+git-tree-sha1 = "cc4054e898b852042d7b503313f7ad03de99c3dd"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "1.7.0"
+version = "1.8.0"
 
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1252,9 +1253,9 @@ version = "10.42.0+1"
 
 [[deps.Pango_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "FriBidi_jll", "Glib_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "ed6834e95bd326c52d5675b4181386dfbe885afb"
+git-tree-sha1 = "3b31172c032a1def20c98dae3f2cdc9d10e3b561"
 uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
-version = "1.55.5+0"
+version = "1.56.1+0"
 
 [[deps.Parameters]]
 deps = ["OrderedCollections", "UnPack"]
@@ -1380,9 +1381,9 @@ version = "6.7.1+1"
 
 [[deps.QuadGK]]
 deps = ["DataStructures", "LinearAlgebra"]
-git-tree-sha1 = "cda3b045cf9ef07a08ad46731f5a3165e56cf3da"
+git-tree-sha1 = "9da16da70037ba9d701192e27befedefb91ec284"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
-version = "2.11.1"
+version = "2.11.2"
 
     [deps.QuadGK.extensions]
     QuadGKEnzymeExt = "Enzyme"
@@ -1437,9 +1438,9 @@ version = "1.3.0"
 
 [[deps.Roots]]
 deps = ["Accessors", "CommonSolve", "Printf"]
-git-tree-sha1 = "f233e0a3de30a6eed170b8e1be0440f732fdf456"
+git-tree-sha1 = "e52cf0872526c7a0b3e1af9c58a69b90e19b022e"
 uuid = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
-version = "2.2.4"
+version = "2.2.5"
 
     [deps.Roots.extensions]
     RootsChainRulesCoreExt = "ChainRulesCore"
@@ -1531,9 +1532,9 @@ version = "1.0.2"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
-git-tree-sha1 = "02c8bd479d26dbeff8a7eb1d77edfc10dacabc01"
+git-tree-sha1 = "e3be13f448a43610f978d29b7adf78c76022467a"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.9.11"
+version = "1.9.12"
 weakdeps = ["ChainRulesCore", "Statistics"]
 
     [deps.StaticArrays.extensions]
@@ -1720,9 +1721,9 @@ version = "1.36.0+0"
 
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
-git-tree-sha1 = "a2fccc6559132927d4c5dc183e3e01048c6dcbd6"
+git-tree-sha1 = "ee6f41aac16f6c9a8cab34e2f7a200418b1cc1e3"
 uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
-version = "2.13.5+0"
+version = "2.13.6+0"
 
 [[deps.XSLT_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "XML2_jll", "Zlib_jll"]
@@ -1952,9 +1953,9 @@ version = "1.18.0+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "d7b5bbf1efbafb5eca466700949625e07533aff2"
+git-tree-sha1 = "055a96774f383318750a1a5e10fd4151f04c29c5"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.45+1"
+version = "1.6.46+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
@@ -2006,7 +2007,6 @@ version = "1.4.1+2"
 # ╔═╡ Cell order:
 # ╟─be6dec6f-2a55-4f8c-8852-52830656c062
 # ╠═6aa38485-f860-4834-ac8b-7a7761fa26e0
-# ╟─76cbc520-3f93-41de-a7e7-7def53de203e
 # ╟─6c9e0bbc-d864-11ee-17bc-6b7763404349
 # ╟─06de07d4-003f-4f41-b10d-a4e3c12e3beb
 # ╟─d26bbf92-04dc-4ba5-8782-cc338888b5a7
