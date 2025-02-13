@@ -4,6 +4,9 @@
 using Markdown
 using InteractiveUtils
 
+# ╔═╡ 2031a395-433a-402c-bf48-e383293efad0
+using NeumannKelvin # make sure this is 0.5+ for this notebook!
+
 # ╔═╡ 2ca442e5-d760-44d3-a7b7-0727ed144203
 begin # fancy 3D interactive plots!!
 	using Plots
@@ -14,21 +17,6 @@ end; # This throws a warning the first time, just rerun to clear it.
 
 # ╔═╡ a77db3a8-4263-4fd2-8ffb-ec19d3135457
 using NeumannKelvin:added_mass
-
-# ╔═╡ 261636cc-dd20-46b5-bbf0-3de9db04f0aa
-begin
-	using NeumannKelvin
-	wigley(ξ,ζ) = (1-ζ^2)*(1-ξ^2)
-	function wigley_hull(hx,hz;L=1,B=1,D=1)
-	    hull(ξ,ζ) = SA[0.5L*ξ,0.5B*wigley(ξ,ζ),D*ζ]
-	    dξ = 2/round(L/hx); ξ = 0.5dξ-1:dξ:1
-	    dζ = 1/round(D/hz); ζ = -0.5dζ:-dζ:-1
-	    param_props.(hull,ξ,ζ',dξ,dζ) |> Table
-	end
-	B,D = 0.1,0.0625; hx,hz=1/20,D/8; h = √(hx*hz)
-	demihull = wigley_hull(hx,hz;B,D); N = length(demihull)
-	md"""Number of panels N = $N, h≈ $(round(h,digits=3)), apect ratio ≈ $(round(hx/hz,digits=2))"""
-end
 
 # ╔═╡ ed04b0d0-e939-11ef-0218-2d432fa6e1fa
 using NeumannKelvin:∂ₙϕ,∫G
@@ -44,23 +32,23 @@ In the last notebook, we wrote a panel method in only 4 lines of code. But we sa
 2. Obtain the panel strengths `q` solving the linear system (_easy_)
 3. Post-process the results to measure what you are interested in (_harder_?)
 
-Step 2 is by far the easiest because it's the same every time. 
+Step 2 is by far the easiest because it is the same every time. 
 
-Step 3 is harder, but as engineers we typically are interested in measuring similar quantities repeatedly, such as the added mass. After careful writing and validating a post-processing code once you can use it forever! 
+Step 3 is harder, but as engineers we are typically interested in measuring similar quantities repeatedly, such as the added mass. After carefully writing and validating a post-processing code once, you can use it forever! 
 
-Step 1 is typically the hardest because every problem is different. Even for the extremely simple example of the sphere, we found it was helpful to use a non-uniform step step in $\theta_2$ to keep the panels around the same size:
+Step 1 is typically the hardest because every problem is different. Even for the extremely simple example of the sphere, we found it was helpful to use a non-uniform step angle $d\theta_2$ to keep the panels around the same size:
 """
 
 # ╔═╡ dfa6d033-9253-47d3-85ad-9f13b4c4d5d3
 function sphere(h;R=1)
     S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)]
     dθ₁ = π/round(π*R/h) # azimuth step size
-	# A uniform polar step works, but makes tiny wedge panels near the poles!
+	# A uniform polar step angle makes tiny wedge panels near the poles!
 	# param_props.(S,(0.5dθ₁:dθ₁:π)',0.5dθ₁:dθ₁:2π,dθ₁,dθ₁) |> Table
 	
-	# Set the polar step based on radius at this azimuth
+	# Set the polar step angle based on radius at this azimuth
     mapreduce(vcat,0.5dθ₁:dθ₁:π) do θ₁
-        dθ₂ = 2π/round(2π*R*sin(θ₁)/h) # polar step size at this azimuth
+        dθ₂ = 2π/round(2π*R*sin(θ₁)/h) # ≈ constant polar _distance_
         param_props.(S,θ₁,0.5dθ₂:dθ₂:2π,dθ₁,dθ₂) |> Table
     end
 end
@@ -70,7 +58,7 @@ plot_area(panels;kwargs...) = Plots.scatter3d(centers(panels)...,
 	marker_z=panels.dA;label=nothing,size=(650,400),kwargs...)
 
 # ╔═╡ eae81e8a-2173-4898-a36c-c6b559c814ee
-plot_area(sphere(0.25))
+plot_area(sphere(0.25),clims=(0,1.1*0.25^2)) # all dA≈h²
 
 # ╔═╡ 62fec8d1-e0ca-447e-ad55-a7a53d0a6528
 md"Once we have that geometry function, getting the added mass is easy!"
@@ -88,7 +76,7 @@ The function `sphere` samples the [parametric surface equation](https://en.wikip
 
 ### Activity 
  - Look up **a different** parametric surface online and implement a function to generate panels on that surface. (If you want a second example, there is one below.)
- - Plot the surface and check if the areas are fairly uniform. Should they be for your shape?
+ - Plot the surface and check if the areas are fairly uniform. _Should_ they be for your shape?
  - Check the added mass. Can you validate the result, or at least argue if it makes sense?
 
 """
@@ -97,7 +85,7 @@ The function `sphere` samples the [parametric surface equation](https://en.wikip
 # function your_new_shape(h) # need to be able to change resolution
 # 	S(ξ,η) = SA[x,y,z] # defined a 3D surface (2-inputs, 3-outputs) 
 # 	ξ,η,dξ,dη = # define your sampling 
-# 	param_props.(S,ξ,η,dξ,dη) |> Table # make a table using vcat or broadcasting
+# 	param_props.(S,ξ,η',dξ,dη) |> Table # make a table using vcat or broadcasting
 # end
 
 # ╔═╡ de038463-d15d-4e89-9deb-00e0429d09fb
@@ -117,9 +105,25 @@ $\eta(\xi,\zeta) = (1-\xi^2)(1-\zeta^2)$
 
 Where $x=\frac 12 L\xi,z=D\zeta$ and $L,B,D$ are the hull length, beam, and depth.
 
-I've implemented this in the code below. See if you can spot a problem...
+I've implemented this in the code below. _Can you spot a problem with the resulting panels?_
 
 """
+
+# ╔═╡ 261636cc-dd20-46b5-bbf0-3de9db04f0aa
+begin
+	function wigley_hull(hx,hz;L=1,B=1,D=1)
+		η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)              # parabolic width equation
+	    S(ξ,ζ) = SA[0.5L*ξ,0.5B*η(ξ,ζ),D*ζ]   # scaled 3D surface
+	    dξ = 2/round(L/hx); ξ = 0.5dξ-1:dξ:1  # sampling in ξ
+	    dζ = 1/round(D/hz); ζ = -0.5dζ:-dζ:-1 # sampling in ζ
+	    param_props.(S,ξ,ζ',dξ,dζ) |> Table   # broadcast over sample points
+	end
+
+	B,D = 0.1,0.0625; hx,hz=1/20,D/8; h = √(hx*hz)
+	demihull = wigley_hull(hx,hz;B,D); N = length(demihull)
+	
+	md"""Number of panels N = $N, h ≈ $(round(h,digits=3)), apect ratio ≈ $(round(hx/hz,digits=2))"""
+end
 
 # ╔═╡ a11ae39e-eb80-4250-9a64-49d2ca9c2f5d
 plot_area(demihull,zlims=(-0.3,0.3),aspect_ratio=1,widen=false)
@@ -129,12 +133,12 @@ md"""
 In increasing order of importance:
 
  1. The panels in the mid-belly are around twice as large as the ends or on the waterline. That is probably fine.
- 1. The panels are 6× longer than they are deep. This would be a real problem if we were trying to capture physics that [change rapidly in $y,z$](https://www.researchgate.net/figure/shows-the-time-evolution-of-free-surface-waves-around-the-traveling-pressure-patch-for_fig5_250349835).
+ 1. The panels are 6× longer than they are deep. This would be a real problem if we were trying to capture physics that change rapidly in $y$ or $z$ (like free surface waves).
  1. Our ship only has [one side!](https://www.youtube.com/watch?v=3m5qxZm_JqM)
 
 ## Reflected panels
 
-Instead of changing the code above, let's just reflect the panels to the other side and stich the two together. 
+Instead of changing the code above, let's just reflect the panels to the other side and join the two sides together. 
 
 ### Activity
 
@@ -162,23 +166,26 @@ reflect(x::SVector;flip=SA[1,-1,1]) = x.*flip
 columnnames(demihull) # 2a. Check what's in a panel
 
 # ╔═╡ a2dbd4f2-4478-49ad-a1f6-46e9cda9b6b7
-# 2b. overload the function to flip everything in a panel
+# 2b. overload the function to reflect everything in a panel
 reflect(p::NamedTuple;flip=SA[1,-1,1]) = (x=reflect(p.x;flip), 
 	n=reflect(p.n;flip), dA=p.dA, x₄=reflect.(p.x₄;flip))
 
 # ╔═╡ e67ab6db-69fe-4706-a711-53c6278e0b53
 hull = vcat(demihull,reflect.(demihull)); # 3. join panels with their reflection
 
+# ╔═╡ b7a9f5e1-8e01-4373-b9e0-0d1d0c54ca27
+plot_area(hull,zlims=(-0.3,0.3),aspect_ratio=1,widen=false,clims=(0,Inf))
+
 # ╔═╡ b9d28dea-9f7d-4826-8f61-4e5e82227eee
 md"""
 
-My solution uses something called _type dispatch_. I can write two functions with the same name and Julia figure out which to use based on the type of the argument when it compiles the code. (This is one of Julia's superpowers and why AutoDiff works so naturally and fast.)
+> My solution uses something called _type dispatch_. I can write two functions with the same name and Julia compiles the correct code based on the type of the argument. (This is one of Julia's superpowers and why AutoDiff works so naturally and fast.)
 
-## Double-body solution
+## Double-body flow
 
-The hull stops abruptly at the waterline $z=0$. 
+The wigley hull stops abruptly at the waterline $z=0$. 
 
-In the next few notebooks we will consider the free-surface and boundary conditions that take-over from that point. However, a typical first-approximation is to reflect the hull across $z=0$. The resulting "double-body" flow is symmetric on either side of $z=0$ and we can use our `reflect` function and panel method from the previous notebook to get the solution.
+In the next few notebooks we will consider the free-surface and boundary conditions that take-over from that point. However, a typical first-approximation is to reflect the hull across $z=0$, and we can make this "double-body" geometry using `reflect`. Then we can solve for the symmetric double-body flow using the same methods as usual.
 
 """
 
@@ -191,11 +198,7 @@ plot_area(double_body,zlims=(-0.3,0.3),aspect_ratio=1,widen=false)
 # ╔═╡ e08a089d-9663-40b4-8dee-899449205bbc
 md"""
 
-Great! We now have both sides of our hull, and we've reflected it above the waterline to give us the "double-body" shape.
-
-## Explicit reflection has a cost
-
-Before patting ourselves on the back too hard, lets think about the relative size and cost of obtaining the `demihull` and `double_body` solutions.
+That was easy, but explicit reflection has a cost. Think about the relative size and cost of obtaining the `demihull` and `double_body` solutions.
 
 """
 
@@ -223,7 +226,9 @@ q_big[1:end÷4] ≈ q ? "it matches!! 🥳" : "it doesn't match... 🤢"
 md"""
 We can see that `A_big` has 0.4M elements! That is 16× the number of elements as `A` and it take *more than* 16× as long to set up and solve. Unfortunately, the solutions don't match without spending the extra time using the combined panels.
 
-We can see below that the results using only `demihull` are fundamentally unphysical because the added mass matrix is not diagonal. Moving the double-body in $y$ should only produce a reaction force in that direction. But because the demihull isn't symmetric, it produces forces in both $y$ and $z$! The added mass in $x$ is also 50× too small!
+We can see below that the results using only `demihull` don't just need to be multiplied by 4 or something - they are fundamentally unphysical!
+ - The added mass matrix is not diagonal. Because the demihull isn't symmetric, it produces forces in $y$ when accelerating in $z$ and vis-versa. 
+ - The added mass in $x$ is 50× too small!
 """
 
 # ╔═╡ 8a18dd5a-2e6b-4485-b9e4-01c34a7d32c8
@@ -264,7 +269,7 @@ Plots = "~1.40.9"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.3"
+julia_version = "1.11.2"
 manifest_format = "2.0"
 project_hash = "1a8558287b38dd4079a4199b88e8328a35847487"
 
@@ -399,9 +404,9 @@ version = "0.7.8"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
-git-tree-sha1 = "26ec26c98ae1453c692efded2b17e15125a5bea1"
+git-tree-sha1 = "403f2d8e209681fcbd9468a8514efff3ea08452e"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.28.0"
+version = "3.29.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -1060,9 +1065,9 @@ version = "10.42.0+1"
 
 [[deps.Pango_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "FriBidi_jll", "Glib_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "ed6834e95bd326c52d5675b4181386dfbe885afb"
+git-tree-sha1 = "3b31172c032a1def20c98dae3f2cdc9d10e3b561"
 uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
-version = "1.55.5+0"
+version = "1.56.1+0"
 
 [[deps.Parameters]]
 deps = ["OrderedCollections", "UnPack"]
@@ -1802,6 +1807,7 @@ version = "1.4.1+2"
 
 # ╔═╡ Cell order:
 # ╟─fa570bdd-3772-4750-980d-d75cf268ffcf
+# ╠═2031a395-433a-402c-bf48-e383293efad0
 # ╠═dfa6d033-9253-47d3-85ad-9f13b4c4d5d3
 # ╠═2ca442e5-d760-44d3-a7b7-0727ed144203
 # ╠═6e5632f7-0a4d-44b2-8f93-16e25c4f5f54
@@ -1809,18 +1815,19 @@ version = "1.4.1+2"
 # ╟─62fec8d1-e0ca-447e-ad55-a7a53d0a6528
 # ╠═a77db3a8-4263-4fd2-8ffb-ec19d3135457
 # ╠═46fe9117-9d23-43ee-8f82-a0b560731b29
-# ╠═8bd8d657-3118-41f9-8058-e8f1f3c12a09
+# ╟─8bd8d657-3118-41f9-8058-e8f1f3c12a09
 # ╠═6a483aed-c865-485d-9ee9-932aad2d3c8b
 # ╠═de038463-d15d-4e89-9deb-00e0429d09fb
 # ╠═014780f7-7858-4a1f-97fb-c3a2d95de659
 # ╟─ddf1cde1-99eb-4d37-ab82-1bbfd20d4540
-# ╠═261636cc-dd20-46b5-bbf0-3de9db04f0aa
+# ╟─261636cc-dd20-46b5-bbf0-3de9db04f0aa
 # ╠═a11ae39e-eb80-4250-9a64-49d2ca9c2f5d
 # ╟─7f614f43-4094-495d-9c4b-bcff1cbc90a7
 # ╠═26daeb90-788e-4f42-bb51-9f6900866a46
 # ╠═7b12a966-70c0-46f8-8b96-ee6c7b1b93da
 # ╠═a2dbd4f2-4478-49ad-a1f6-46e9cda9b6b7
 # ╠═e67ab6db-69fe-4706-a711-53c6278e0b53
+# ╟─b7a9f5e1-8e01-4373-b9e0-0d1d0c54ca27
 # ╟─b9d28dea-9f7d-4826-8f61-4e5e82227eee
 # ╠═bed61b8b-f3fd-4b28-b62a-f6f193029da8
 # ╠═af312e79-0e9c-48b3-9f10-3f5f5a51243e
