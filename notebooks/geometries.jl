@@ -109,11 +109,11 @@ I've implemented this in the code below. _Can you spot a problem with the result
 # ╔═╡ 261636cc-dd20-46b5-bbf0-3de9db04f0aa
 begin
 	function wigley_hull(hx,hz;L=1,B=1,D=1)
-		η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)              # parabolic width equation
-	    S(ξ,ζ) = SA[0.5L*ξ,0.5B*η(ξ,ζ),D*ζ]   # scaled 3D surface
-	    dξ = 2/round(L/hx); ξ = 0.5dξ-1:dξ:1  # sampling in ξ
-	    dζ = 1/round(D/hz); ζ = -0.5dζ:-dζ:-1 # sampling in ζ
-	    param_props.(S,ξ,ζ',dξ,dζ) |> Table   # broadcast over sample points
+		η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)             # parabolic width equation
+	    S(ξ,ζ) = SA[0.5L*ξ,0.5B*η(ξ,ζ),-D*ζ] # scaled 3D surface
+	    dξ = 2/round(L/hx); ξ = 0.5dξ-1:dξ:1 # sampling in ξ
+	    dζ = 1/round(D/hz); ζ = 0.5dζ:dζ:1   # sampling in ζ
+	    param_props.(S,ξ,ζ',dξ,dζ) |> Table  # broadcast over sample points
 	end
 
 	B,D = 0.1,0.0625; hx,hz=1/20,D/8; h = √(hx*hz)
@@ -223,16 +223,16 @@ q_big[1:end÷4] ≈ q ? "it matches!! 🥳" : "it doesn't match... 🤢"
 md"""
 We can see that `A_big` has 0.4M elements! That is 16× the number of elements as `A` and it take *more than* 16× as long to set up and solve. Unfortunately, the solutions don't match without spending the extra time using the combined panels.
 
-We can see below that the results using only `demihull` don't just need to be multiplied by 4 or something - they are fundamentally unphysical!
+We can see below that the results using only `demihull` don't just need to be multiplied by 4 - they are fundamentally unphysical!
  - The added mass matrix is not diagonal. Because the demihull isn't symmetric, it produces forces in $y$ when accelerating in $z$ and vis-versa. 
- - The added mass in $x$ is 50× too small!
+ - The values on the diagonal are all over the place. $m_{xx}$ is 7× too small and the others are 1.5-1.8× off.
 """
 
 # ╔═╡ 8a18dd5a-2e6b-4485-b9e4-01c34a7d32c8
 added_mass(demihull;ϕ=∫G)/(B*D) # This isn't correct!
 
 # ╔═╡ 2aed92b1-0829-47e3-a560-c58e6aa899e8
-added_mass(double_body;ϕ=∫G)/(B*D) # diagonal & mₓₓ is 50× bigger!
+added_mass(double_body;ϕ=∫G)/(B*D) # diagonal & mₓₓ is 7× bigger!
 
 # ╔═╡ 4ae2c8c2-f5a5-4b6d-ab8c-16b25a4ecf4e
 md"""

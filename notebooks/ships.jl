@@ -28,43 +28,36 @@ begin
 		eachrow(stack(panels.x))...,
 		marker_z=z;label=nothing,size=(650,400),kwargs...)
 
+	using NeumannKelvin:∇Φ
 	u²(x,q,panels;kwargs...) = sum(abs2,SA[-1,0,0]+∇Φ(x,q,panels;kwargs...))
 	
 	function wigley_hull(hx,hz;L=1,B=1,D=1)
-		η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)              # parabolic width equation
-	    S(ξ,ζ) = SA[0.5L*ξ,0.5B*η(ξ,ζ),D*ζ]   # scaled 3D surface
-	    dξ = 2/round(L/hx); ξ = 0.5dξ-1:dξ:1  # sampling in ξ
-	    dζ = 1/round(D/hz); ζ = -0.5dζ:-dζ:-1 # sampling in ζ
-	    param_props.(S,ξ,ζ',dξ,dζ) |> Table   # broadcast over sample points
+		η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)             # parabolic width equation
+	    S(ξ,ζ) = SA[0.5L*ξ,0.5B*η(ξ,ζ),-D*ζ] # scaled 3D surface
+	    dξ = 2/round(L/hx); ξ = 0.5dξ-1:dξ:1 # sampling in ξ
+	    dζ = 1/round(D/hz); ζ = 0.5dζ:dζ:1   # sampling in ζ
+	    param_props.(S,ξ,ζ',dξ,dζ) |> Table  # broadcast over sample points
 	end
 end
 
 # ╔═╡ 310533f0-dd1b-4162-9548-b6fada02725f
 begin
 	B,D = 0.1,0.0625; hx,hz=1/20,D/8
-	demihull = wigley_hull(hx,hz;B,D); N = length(demihull)
-	let
-		hull = vcat(demihull,reflect.(demihull,flip=SA[1,-1,1]))
-		plot_z(hull)
-		params = (ϕ=∫kelvin,Fn=0.316)
-		Plots.plot!(title=steady_force(
-			influence(hull;params...)\first.(hull.n),hull;params...))
-	end
+	demihull = wigley_hull(hx,hz;B,D); length(demihull)
 end
 
 # ╔═╡ eb023a85-2563-4986-b8e5-c738a3596462
 begin
 	function ∫kelvin_S₂(x,p;kwargs...) # y-symmetric potential
-		∫kelvin(x,p;kwargs...)+∫kelvin(x,reflect(p,flip=SA[1,-1,1]);kwargs...) 
+		∫kelvin(x,p;kwargs...)+∫kelvin(x,reflect(p,flip=SA[1,-1,1]);kwargs...)
 	end
-	force_S₂(x::SVector)=x+reflect(x,flip=SA[1,-1,1]) 
-	let
-		params = (ϕ=∫kelvin_S₂,Fn=0.316)
-		plot_z(demihull)
-		demi_f = steady_force(
-			influence(demihull;params...)\first.(demihull.n),demihull;params...)
-		Plots.plot!(title=force_S₂(demi_f))
-	end
+	force_S₂(x::SVector)=x .* SA[2,0,2] # no need to reflect the sum
+
+	params = (ϕ=∫kelvin_S₂,Fn=0.316)
+	q = influence(demihull;params...)\first.(demihull.n)
+	cₚ = map(x->1-u²(x,q,demihull;params...),demihull.x)
+	plot_z(demihull,cₚ;aspect_ratio=1,widen=false,zlims=(-0.3,0.3))
+	Plots.surface!(range(1,-3,100),range(0,1,25),(x,y)->params.Fn^2*ζ(x,y,q,demihull;dz=0,params...),ylim=(0,3))
 end
 
 # ╔═╡ 61283274-0f84-49e3-acfe-d2f485fe6225
@@ -108,7 +101,7 @@ Plots = "~1.40.4"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.2"
+julia_version = "1.11.3"
 manifest_format = "2.0"
 project_hash = "05f84f54b7bf36b624ce654983560354937ecd02"
 
@@ -243,9 +236,9 @@ version = "0.7.8"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
-git-tree-sha1 = "403f2d8e209681fcbd9468a8514efff3ea08452e"
+git-tree-sha1 = "26ec26c98ae1453c692efded2b17e15125a5bea1"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.29.0"
+version = "3.28.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -904,9 +897,9 @@ version = "10.42.0+1"
 
 [[deps.Pango_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "FriBidi_jll", "Glib_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "3b31172c032a1def20c98dae3f2cdc9d10e3b561"
+git-tree-sha1 = "ed6834e95bd326c52d5675b4181386dfbe885afb"
 uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
-version = "1.56.1+0"
+version = "1.55.5+0"
 
 [[deps.Parameters]]
 deps = ["OrderedCollections", "UnPack"]
@@ -1646,7 +1639,7 @@ version = "1.4.1+2"
 
 # ╔═╡ Cell order:
 # ╠═79e62d68-193c-11ef-1c14-495fcdba8972
-# ╟─e10c5c34-2e42-4884-900b-df4d50f021e6
+# ╠═e10c5c34-2e42-4884-900b-df4d50f021e6
 # ╠═310533f0-dd1b-4162-9548-b6fada02725f
 # ╠═eb023a85-2563-4986-b8e5-c738a3596462
 # ╟─61283274-0f84-49e3-acfe-d2f485fe6225
