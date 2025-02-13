@@ -5,14 +5,15 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 2031a395-433a-402c-bf48-e383293efad0
-using NeumannKelvin # make sure this is 0.5+ for this notebook!
+using NeumannKelvin # make sure this is v.0.5+ for this notebook!
 
 # ╔═╡ 2ca442e5-d760-44d3-a7b7-0727ed144203
 begin # fancy 3D interactive plots!!
 	using Plots
 	using PlotlyBase
-	centers(panels) = eachrow(stack(panels.x))
 	plotly()
+	plot_area(panels;kwargs...) = Plots.scatter3d(eachrow(stack(panels.x))...,
+		marker_z=panels.dA;label=nothing,size=(650,400),kwargs...)
 end; # This throws a warning the first time, just rerun to clear it.
 
 # ╔═╡ a77db3a8-4263-4fd2-8ffb-ec19d3135457
@@ -52,10 +53,6 @@ function sphere(h;R=1)
         param_props.(S,θ₁,0.5dθ₂:dθ₂:2π,dθ₁,dθ₂) |> Table
     end
 end
-
-# ╔═╡ 6e5632f7-0a4d-44b2-8f93-16e25c4f5f54
-plot_area(panels;kwargs...) = Plots.scatter3d(centers(panels)...,
-	marker_z=panels.dA;label=nothing,size=(650,400),kwargs...)
 
 # ╔═╡ eae81e8a-2173-4898-a36c-c6b559c814ee
 plot_area(sphere(0.25),clims=(0,1.1*0.25^2)) # all dA≈h²
@@ -251,6 +248,12 @@ So we're left with the annoying situation that it is impossible to get the corre
  - What are some limitations of this approach?
 
 """
+
+# ╔═╡ c2437329-a343-4909-af0a-55820fcce5b3
+begin
+	@eval Main.PlutoRunner format_output(x::Float64; context = default_iocontext) = format_output_default(round(x; digits = 3), context)
+	@eval Main.PlutoRunner format_output(x::AbstractArray{Float64}; context = default_iocontext) = format_output_default(round.(x; digits = 3), context)
+end;
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1810,7 +1813,6 @@ version = "1.4.1+2"
 # ╠═2031a395-433a-402c-bf48-e383293efad0
 # ╠═dfa6d033-9253-47d3-85ad-9f13b4c4d5d3
 # ╠═2ca442e5-d760-44d3-a7b7-0727ed144203
-# ╠═6e5632f7-0a4d-44b2-8f93-16e25c4f5f54
 # ╠═eae81e8a-2173-4898-a36c-c6b559c814ee
 # ╟─62fec8d1-e0ca-447e-ad55-a7a53d0a6528
 # ╠═a77db3a8-4263-4fd2-8ffb-ec19d3135457
@@ -1841,5 +1843,6 @@ version = "1.4.1+2"
 # ╠═8a18dd5a-2e6b-4485-b9e4-01c34a7d32c8
 # ╠═2aed92b1-0829-47e3-a560-c58e6aa899e8
 # ╟─4ae2c8c2-f5a5-4b6d-ab8c-16b25a4ecf4e
+# ╟─c2437329-a343-4909-af0a-55820fcce5b3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
