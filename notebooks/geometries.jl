@@ -61,7 +61,7 @@ plot_area(sphere(0.25),clims=(0,1.1*0.25^2)) # all dA≈h²
 md"Once we have that geometry function, getting the added mass is easy!"
 
 # ╔═╡ 46fe9117-9d23-43ee-8f82-a0b560731b29
-round.(added_mass(sphere(0.25))/(2π/3),digits=3)
+added_mass(sphere(0.25))/(2π/3)
 
 # ╔═╡ 8bd8d657-3118-41f9-8058-e8f1f3c12a09
 md"""
@@ -229,10 +229,10 @@ We can see below that the results using only `demihull` don't just need to be mu
 """
 
 # ╔═╡ 8a18dd5a-2e6b-4485-b9e4-01c34a7d32c8
-round.(added_mass(demihull;ϕ=∫G)/(B*D),digits=3) # This isn't correct!
+added_mass(demihull;ϕ=∫G)/(B*D) # This isn't correct!
 
 # ╔═╡ 2aed92b1-0829-47e3-a560-c58e6aa899e8
-round.(added_mass(double_body;ϕ=∫G)/(B*D),digits=3) # diagonal & mₓₓ is 50× bigger!
+added_mass(double_body;ϕ=∫G)/(B*D) # diagonal & mₓₓ is 50× bigger!
 
 # ╔═╡ 4ae2c8c2-f5a5-4b6d-ab8c-16b25a4ecf4e
 md"""
