@@ -275,7 +275,7 @@ end
 
 # ╔═╡ 1495dcb8-104f-41ff-a988-5abdca975248
 md"""
-Notice the off diagonals are near machine precision zero. The diagonal values are close to one, but have some error.
+Since we've scaled by the solution, the result _should_ be the identity matrix, but there is some error.
 
 #### Actitivity:
  - Write a function `sphere_ma_error(h)` which uses `LinearAlgebra: norm,I` to compute the error of `M`.
@@ -302,6 +302,12 @@ We were careful to visually and quantitatively check our intermediate results **
 The same three-part proceedure and careful verification and validation will be present for every example we use in this class (and hopefully in your work in the future as well).
 """
 
+# ╔═╡ 9574fedd-8bc8-4363-8d46-c967d046573e
+begin
+	@eval Main.PlutoRunner format_output(x::Float64; context = default_iocontext) = format_output_default(round(x; digits = 3), context)
+	@eval Main.PlutoRunner format_output(x::AbstractArray{Float64}; context = default_iocontext) = format_output_default(round.(x; digits = 3), context)	
+end;
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -324,7 +330,7 @@ TypedTables = "~1.4.6"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.3"
+julia_version = "1.11.2"
 manifest_format = "2.0"
 project_hash = "266df1b14df70a034244e728479848bbc1b90b1f"
 
@@ -1853,7 +1859,7 @@ version = "1.4.1+2"
 # ╟─6a2f8a49-6a92-45ac-b538-74f478594033
 # ╠═7d7397ad-8f64-41c8-9742-62921d21be9c
 # ╟─44da77a5-8fbc-40f8-a3c5-1006295dd59e
-# ╠═75db3a69-1e06-4482-9df0-a77451ceb005
+# ╟─75db3a69-1e06-4482-9df0-a77451ceb005
 # ╟─b40064aa-c1b6-46c6-86fc-87661b3d4d27
 # ╟─5e3f59e0-92a6-486e-8e62-67d282d5821e
 # ╟─1719d47e-5861-481a-8398-84c92e58fbb1
@@ -1869,5 +1875,6 @@ version = "1.4.1+2"
 # ╠═00965cd1-b233-42f7-8a6d-1688175cac1e
 # ╟─1495dcb8-104f-41ff-a988-5abdca975248
 # ╟─1aa3a5c4-a4d7-45fe-b514-12bfb60d893b
+# ╟─9574fedd-8bc8-4363-8d46-c967d046573e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
