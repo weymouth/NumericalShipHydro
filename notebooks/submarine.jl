@@ -40,6 +40,8 @@ begin
 	using Plots
 	using PlotlyBase
 	plotly()
+	@eval Main.PlutoRunner format_output(x::Float64; context = default_iocontext) = format_output_default(round(x; digits = 3), context)
+	@eval Main.PlutoRunner format_output(x::AbstractArray{Float64}; context = default_iocontext) = format_output_default(round.(x; digits = 3), context)
 end;
 
 # ╔═╡ be6dec6f-2a55-4f8c-8852-52830656c062
