@@ -109,7 +109,7 @@ I've implemented this in the code below. _Can you spot a problem with the result
 # ╔═╡ 261636cc-dd20-46b5-bbf0-3de9db04f0aa
 begin
 	function wigley_hull(hx,hz;L=1,B=1,D=1)
-		η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)             # parabolic width equation
+	    η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)             # parabolic width equation
 	    S(ξ,ζ) = SA[0.5L*ξ,0.5B*η(ξ,ζ),-D*ζ] # scaled 3D surface
 	    dξ = 2/round(L/hx); ξ = 0.5dξ-1:dξ:1 # sampling in ξ
 	    dζ = 1/round(D/hz); ζ = 0.5dζ:dζ:1   # sampling in ζ
