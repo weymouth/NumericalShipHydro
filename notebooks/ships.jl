@@ -31,7 +31,7 @@ begin
 	using NeumannKelvin:∇Φ
 	u²(x,q,panels;kwargs...) = sum(abs2,SA[-1,0,0]+∇Φ(x,q,panels;kwargs...))
 	
-	function wigley_hull(hx,hz;L=1,B=1,D=1)
+	function wigley_hull(hx,hz;L=1,B=0.1,D=1/16)
 		η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)             # parabolic width equation
 	    S(ξ,ζ) = SA[0.5L*ξ,0.5B*η(ξ,ζ),-D*ζ] # scaled 3D surface
 	    dξ = 2/round(L/hx); ξ = 0.5dξ-1:dξ:1 # sampling in ξ
@@ -40,25 +40,30 @@ begin
 	end
 end
 
-# ╔═╡ 310533f0-dd1b-4162-9548-b6fada02725f
-begin
-	B,D = 0.1,0.0625; hx,hz=1/20,D/8
-	demihull = wigley_hull(hx,hz;B,D); length(demihull)
-end
+# ╔═╡ 11a1fc99-a02b-441d-904e-b9be497bc7c0
+wigley_WL(x,B=0.1) = 0.5B*(1-(2x)^2)
 
-# ╔═╡ eb023a85-2563-4986-b8e5-c738a3596462
+# ╔═╡ 4974544c-d368-498d-a0e4-17b34107ebe0
 begin
 	function ∫kelvin_S₂(x,p;kwargs...) # y-symmetric potential
 		∫kelvin(x,p;kwargs...)+∫kelvin(x,reflect(p,flip=SA[1,-1,1]);kwargs...)
 	end
 	force_S₂(x::SVector)=x .* SA[2,0,2] # no need to reflect the sum
 
-	params = (ϕ=∫kelvin_S₂,Fn=0.316)
-	q = influence(demihull;params...)\first.(demihull.n)
-	cₚ = map(x->1-u²(x,q,demihull;params...),demihull.x)
-	plot_z(demihull,cₚ;aspect_ratio=1,widen=false,zlims=(-0.3,0.3))
-	Plots.surface!(range(1,-3,100),range(0,1,25),(x,y)->params.Fn^2*ζ(x,y,q,demihull;dz=0,params...),ylim=(0,3))
+	ps = (ϕ=∫kelvin_S₂,Fn=0.316,dz=10)
+	h = 1/32; demihull = wigley_hull(h,h)
+	q = influence(demihull;ps...)\first.(demihull.n)
+	length(demihull)
 end
+
+# ╔═╡ 1ade87af-ca4a-4544-a704-915bab1e0586
+Plots.contourf(-2.5:h:1,0:h:1.5,(x,y)->ζ(x,y,q,demihull;dz=0,ps...),
+		c=:balance,aspect_ratio=1.,clims=(-0.1,0.1));Plots.plot!(
+	Plots.Shape(-0.5:0.05:0.5,wigley_WL.(-0.5:0.05:0.5)),c=:black,legend=nothing)
+
+# ╔═╡ aaf40899-e84b-41c9-8300-02956ab342c7
+Plots.plot(-0.5:h/2:0.5,x->ζ(x,wigley_WL(x),q,demihull;ps...),
+	label=nothing,ylims=(-0.2,0.4))
 
 # ╔═╡ 61283274-0f84-49e3-acfe-d2f485fe6225
 md"""
@@ -70,18 +75,6 @@ And here is a plot from Baar's thesis, with his Neuman-Kelvin results along with
 - First off, we can see that both the Neuman-Kelvin methods don't capture the large bow wave height very well. This seems consistent with linear theory's restriction to low wave amplitudes. 
 
 - Second, we can see that while our numerical method matches Baar's fairly well, some of the features (especially the near the midbody) are a little off. 
-
-## Waterline integrals
-
-There is one new _modelling error_ we introduced when piercing the free-surface plane. Our potential was derived assuming an infinite free-surface, but now there is a ship in the way! 
-
-We need to account for the change in the boundary shape with an additional integral
-
-$\Phi = Ux + \int_B q(x') G(x,x')da + \int_\chi q(x') G(x,x') n_x dy$
-
-The first integral is our normal panel integral over the body surface $B$, but the second is contour integral along $\chi$, the intersection between the body and $z=0$.
-
-This isn't hard to set up numerically - it just adds a contribution from each of the panels touching $\chi$ which I check using the `iswaterline` function above.
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1639,9 +1632,11 @@ version = "1.4.1+2"
 
 # ╔═╡ Cell order:
 # ╠═79e62d68-193c-11ef-1c14-495fcdba8972
-# ╠═e10c5c34-2e42-4884-900b-df4d50f021e6
-# ╠═310533f0-dd1b-4162-9548-b6fada02725f
-# ╠═eb023a85-2563-4986-b8e5-c738a3596462
+# ╟─e10c5c34-2e42-4884-900b-df4d50f021e6
+# ╠═11a1fc99-a02b-441d-904e-b9be497bc7c0
+# ╠═4974544c-d368-498d-a0e4-17b34107ebe0
+# ╟─1ade87af-ca4a-4544-a704-915bab1e0586
+# ╟─aaf40899-e84b-41c9-8300-02956ab342c7
 # ╟─61283274-0f84-49e3-acfe-d2f485fe6225
 # ╟─8e5e8d2a-438c-4952-99d1-ad3b28a1f10d
 # ╟─00000000-0000-0000-0000-000000000001

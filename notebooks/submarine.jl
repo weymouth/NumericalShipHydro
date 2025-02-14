@@ -32,8 +32,10 @@ end
 # ╔═╡ 6c9e0bbc-d864-11ee-17bc-6b7763404349
 begin
 	using PlutoUI
-	md""" Z $(@bind Zp Slider([-2,-1,-0.5,-0.2,0],default=-0.5,show_value=true)),  Fn $(@bind Fnp Slider([0.3,0.5,1.0,1.5],default=1,show_value=true)),  G vs ζ $(@bind show_green CheckBox(default=true))"""
-end
+	md""" Z/L $(@bind Zp Slider([-0.32,-0.16,-0.08,-0.04,-0.02,-0.01], default=-0.08,show_value=true)),  Fn $(@bind Fnp Slider([0.2,0.3,0.4,0.5],default=0.3,show_value=true)),  
+	show G $(@bind show_green CheckBox(default=true)),  
+	enhance! 😎 $(@bind enhance CheckBox(default=false))"""
+end 
 
 # ╔═╡ 98242910-e65e-4a00-8ce4-92233be77c3a
 begin
@@ -78,16 +80,18 @@ end
 # ╔═╡ 06de07d4-003f-4f41-b10d-a4e3c12e3beb
 let
 	G(x,y) = G_NK(SA[x,y,0],SA[0,0,Zp],Fn=Fnp)
+	rez = enhance ? 100 : 30
+	xg,yg=range(-3,0.75,4rez),range(-1.2,1.2,3rez+1)
 	if show_green
-		plot_surface(G,normalize=true,c=:delta,
+		plot_surface(G,normalize=true,c=:delta;xg,yg,
 			colorbartitle="G/max(G)",title="Point source at Z=$Zp, Fn=$Fnp")
 	else
-		plot_surface((x,y)->derivative(x->G(x,y),x),
+		plot_surface((x,y)->derivative(x->G(x,y),x);xg,yg,
 			normalize=true,c=:balance,colorbartitle="ζ/max(ζ)",
 			title="Point source at Z=$Zp, Fn=$Fnp")
 	end
-	plot!([0,-8],[0,√8],c=:black,ls=:dot,label=nothing)
-	plot!([0,-8],[0,-√8],c=:black,ls=:dot,label=nothing)
+	plot!([0,-3],[0,3/√8],c=:black,ls=:dot,label=nothing)
+	plot!([0,-3],[0,-3/√8],c=:black,ls=:dot,label=nothing)
 end
 
 # ╔═╡ 0ac277f4-27da-410b-a732-13be2f0b9667
