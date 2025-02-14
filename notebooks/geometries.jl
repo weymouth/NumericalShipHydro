@@ -44,10 +44,10 @@ Step 1 is typically the hardest because every problem is different. Even for the
 function sphere(h;R=1)
     S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)]
     dθ₁ = π/round(π*R/h) # azimuth step size
-	# A uniform polar step angle makes tiny wedge panels near the poles!
-	# param_props.(S,(0.5dθ₁:dθ₁:π)',0.5dθ₁:dθ₁:2π,dθ₁,dθ₁) |> Table
-	
-	# Set the polar step angle based on radius at this azimuth
+    # A uniform polar step angle makes tiny wedge panels near the poles!
+    # param_props.(S,(0.5dθ₁:dθ₁:π)',0.5dθ₁:dθ₁:2π,dθ₁,dθ₁) |> Table
+
+    # Set the polar step angle based on radius at this azimuth
     mapreduce(vcat,0.5dθ₁:dθ₁:π) do θ₁
         dθ₂ = 2π/round(2π*R*sin(θ₁)/h) # ≈ constant polar _distance_
         param_props.(S,θ₁,0.5dθ₂:dθ₂:2π,dθ₁,dθ₂) |> Table
