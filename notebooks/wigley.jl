@@ -4,6 +4,14 @@
 using Markdown
 using InteractiveUtils
 
+# ╔═╡ e10c5c34-2e42-4884-900b-df4d50f021e6
+begin
+	using NeumannKelvin # check for v.0.5+
+	reflect(x::SVector;flip=SA[1,-1,1]) = x.*flip
+	reflect(p::NamedTuple;flip=SA[1,-1,1]) = (x=reflect(p.x;flip), 
+		n=reflect(p.n;flip), dA=p.dA, x₄=reflect.(p.x₄;flip))
+end
+
 # ╔═╡ 7da113fa-7815-4452-be60-284272fd70ed
 using NeumannKelvin:kelvin,wavelike,nearfield
 
@@ -16,24 +24,6 @@ begin
 	@eval Main.PlutoRunner format_output(x::Float64; context = default_iocontext) = format_output_default(round(x; digits = 3), context)
 	@eval Main.PlutoRunner format_output(x::AbstractArray{Float64}; context = default_iocontext) = format_output_default(round.(x; digits = 3), context)	
 end;
-
-# ╔═╡ e10c5c34-2e42-4884-900b-df4d50f021e6
-begin
-	using PlutoUI
-	using NeumannKelvin # check for v.0.5+
-	
-	# Copying content from previous notebooks
-	reflect(x::SVector;flip=SA[1,-1,1]) = x.*flip
-	reflect(p::NamedTuple;flip=SA[1,-1,1]) = (x=reflect(p.x;flip), 
-		n=reflect(p.n;flip), dA=p.dA, x₄=reflect.(p.x₄;flip))
-
-	plot_z(panels,z=panels.dA;kwargs...) = Plots.scatter3d(
-		eachrow(stack(panels.x))...,
-		marker_z=z;label=nothing,size=(650,400),kwargs...)
-
-	using NeumannKelvin:∇Φ
-	u²(x,q,panels;kwargs...) = sum(abs2,SA[-1,0,0]+∇Φ(x,q,panels;kwargs...))
-end
 
 # ╔═╡ 18943a32-3c3e-44f3-8836-7cec519a2370
 md"""
@@ -57,6 +47,9 @@ begin
 
 	wigley_WL(x,B=0.1) = 0.5B*(1-(2x)^2)
 	wigley_shape(h,x=-0.5:h:0.5) = Plots.Shape(x,wigley_WL.(x))
+
+	h = 1/32; demihull = wigley_hull(h,h)  # create panels
+	length(demihull)
 end
 
 # ╔═╡ 8c6fd3d1-e895-46c9-a843-8e2511cd6d2d
@@ -80,43 +73,77 @@ Unfortunately, the divergent wavelenth also has a strong dependance on the depth
 
 > This means that we can't possibly integrate the panel influence using a cell-center or any other simple Gauss quadrature!!
 
-While there might be elegant ways to deal with this, I am afraid the easiest work-around is to simply limit the `kelvin` function to use some maximum argument `max_z`. (This breaks my heart after putting in so much effort to get `wavelike` working at `z=0`.)
+While there might be elegant ways to deal with this, I am afraid the easiest work-around is to simply limit the `kelvin` function to use some maximum argument `max_z`. (This breaks my heart after putting in so much effort to get `wavelike` working at `z=-0`.)
 """
 
 # ╔═╡ d00deac8-7835-4a9f-82d5-ddd74f15ced5
-function NeumannKelvin.kelvin(ξ,α;Fn,max_z=-0.25)
+function NeumannKelvin.kelvin(ξ,α;Fn,max_z=-1/50)
 	ξ[3]> 0 && throw(DomainError(ξ[3],"Sources must be below z=0"))
 	x,y,z = (ξ-α)/Fn^2
-	z = min(z,max_z) # limit z!! 💔
+	z = min(z,max_z/Fn^2) # limit z!! 💔
 	(nearfield(x,y,z)+wavelike(x,abs(y),z))/Fn^2
 end
 
-# ╔═╡ 97a8846d-7a06-43fa-90c5-74f6d30dfd67
+# ╔═╡ dee13ee2-693c-4065-aa1e-76c3b60de2e0
 md"""
-The code above shows how you can redefine a function in a package in Julia. Note that you need to define the function with the package name included. Here, I've basically copy-pasted the code for `kelvin` in the package and added the limit to the Froude-scaled `z`. 
 
-## Predicted waterline height and wave field
+The code above shows how you can redefine a function in a package in Julia. Note that you need to define the function with the package name included. Here, I've basically copy-pasted the code for `kelvin` in the package and added the z-limit.
+	
+## Waterline integrals
 
-Since the Wigley hull is y-symmetric, I'll also define the `S₂` version of `∫kelvin` to speed up the simulations a bit. Using this potential, we can solve for the free-surface flow on the demihull.
+There is also a new _modelling error_ we introduced when piercing the free-surface plane. Our potential was derived assuming an infinite free-surface, but now there is a ship in the way! 
+
+We need to account for the change in the boundary shape with an additional integral
+
+$\Phi = Ux + \int_B q(x') G(x,x') \text{ d}a + \int_\chi \tilde q(x') G(x,x') n_x \text{ d}l$
+
+The first integral is our normal panel integral over the body surface $B$, but the second is contour integral along $\chi$, the intersection between the body and $z=0$. The _linear_ source density $\tilde q$ has units of $s/l$, whereas $q$ has units of $s/a$.
+
+To keep things simple numerically, we will set $\tilde q \text{ d}l = q \text{ d}a$ for all panels touching $χ$. Therefore, the contour integral won't introduce any new variables, it will just add a contribution from $\chi$ to the influence of those panels.
+"""
+
+# ╔═╡ 95099a21-052f-4d3e-bfc8-d251eb59f299
+begin
+	∫contour(x,p;Fn) = kelvin(x,p.x .* SA[1,1,0];Fn)*p.n[1]*p.dA
+	function ∫surface(x,p;Fn,χ=true,dz=0)
+		(!χ || p.x[3]^2 > p.dA) && return ∫kelvin(x,p;Fn,dz) # no waterline
+		∫kelvin(x,p;Fn,dz)+∫contour(x,p;Fn)
+	end
+end
+
+# ╔═╡ 189a051c-059d-4cd7-883a-28f447062ca1
+md"""
+
+> Note that I'm testing if a panel touches $z=0$ with `z^2>dA`. 
+
+Since the Wigley hull is y-symmetric, I'll also define the $S_2$ version of `∫surface` to speed up the simulations a bit. Using this potential, we can solve for the free-surface flow on the demihull.
+
+#### Activity 
+
+ - When will the $z^2>dA$ formula fail? Can you think of a better approach?
+ - The contour integral is proportional to $n_x$. Where will that be large? Will it _ever_ be large for the Wigley hull?
+ - What does using the $S_2$ version of the potential keep us from testing?
+
 """
 
 # ╔═╡ 176ede21-5536-4e4e-96fc-1ba9377788f2
-function ∫kelvin_S₂(x,p;kwargs...) # y-symmetric potential
-	∫kelvin(x,p;kwargs...)+∫kelvin(x,reflect(p,flip=SA[1,-1,1]);kwargs...)
-end
-
-# ╔═╡ 6e233803-f1e9-420a-89af-968d2a7a2b85
-begin
-	ps = (ϕ=∫kelvin_S₂,Fn=0.316,dz=0)     # NamedTuple of keyword-arguments
-	h = 1/32; demihull = wigley_hull(h,h)            # create panels
-	q = influence(demihull;ps...)\first.(demihull.n) # solve for densities
-	length(demihull)
+function ∫surface_S₂(x,p;kwargs...)  # y-symmetric potentials
+    ∫surface(x,p;kwargs...)+∫surface(x,reflect(p,flip=SA[1,-1,1]);kwargs...)
 end
 
 # ╔═╡ 82c22c27-ee06-4d5a-9cf4-bc3ca177ff88
 md"""
+
+## Predicted waterline height and wave field
+
 Let's investigate the change in the free surface elevation $\zeta$ as we change $\text{Fn}$. Using the wavelength formula above, we should have $\lambda(\text{Fn}=0.4)\approx L$ at the high speed and $\lambda(\text{Fn}=0.2)\approx L/4$ at the low speed, and we see this behaviour verified in our waterline predictions. 
 """
+
+# ╔═╡ 6e233803-f1e9-420a-89af-968d2a7a2b85
+begin
+	ps = (ϕ=∫surface_S₂,Fn=0.316)        # NamedTuple of keyword-arguments
+	q = influence(demihull;ps...)\first.(demihull.n) # solve for densities
+end;
 
 # ╔═╡ aaf40899-e84b-41c9-8300-02956ab342c7
 Plots.plot(-0.5:h/2:0.5,x->2ζ(x,wigley_WL(x),q,demihull;ps...),
@@ -136,90 +163,50 @@ Plots.contourf(-2.5:0.04:1,0:0.05:1.5,(x,y)->2ζ(x,y,q,demihull;ps...),
 	,c=:black,legend=nothing)
 
 # ╔═╡ 4b4f0d0b-3cbc-4704-b22d-a2e9564cd85e
-md"""The Kelvin wake pattern has the expected angle of around 19.5 degrees regardless of $\text{Fn}$, however the relative strength of the transverse and divergent wakes depend strongly on $\text{Fn}$. You can check this figure against a nonlinear panel method shown in Newman 1992. Our free-surface with just 64 panels matches the nonlinear results using 2200 free surface panels!"""
-
-# ╔═╡ 2d723831-fef3-4635-b5e7-ed6b81ee2585
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-	plot_cₚ(q,panels;kwargs...) = Plots.scatter3d(centers(panels)...,
-		marker_z=map(x->1-u²(x,q,panels;kwargs...),panels.x),
-		label=nothing,clims=(-Inf,1))
-	function plot_ζ!(q,panels;
-		x=range(-2.5,1,50),y=range(0,1.5,31),scale=2,Fn,kwargs...)
-		sζ(x,y) = scale*Fn^2*ζ(x,y,q,panels;Fn,kwargs...)
-		z = sζ.(x',y); sz = z./maximum(abs,z)
-		mx = maximum(abs,z)
-		Plots.surface!(x,y,z,colorbar=nothing,surfacecolor=sz,
-			aspect_ratio=:equal,zlims=(-0.25,0.25),c=:balance)
-	end
-	# plot_cₚ(q,demihull;ps...,);plot_ζ!(q,demihull;ps...)
-end
-  ╠═╡ =#
-
-# ╔═╡ dee13ee2-693c-4065-aa1e-76c3b60de2e0
-md"""
-## Waterline integrals
-
-There is one new _modelling error_ we introduced when piercing the free-surface plane. Our potential was derived assuming an infinite free-surface, but now there is a ship in the way! 
-
-We need to account for the change in the boundary shape with an additional integral
-
-$\Phi = Ux + \int_B q(x') G(x,x')da + \int_\chi q(x') G(x,x') n_x dy$
-
-The first integral is our normal panel integral over the body surface $B$, but the second is contour integral along $\chi$, the intersection between the body and $z=0$.
-
-This isn't hard to set up numerically - it just adds a contribution from each of the panels touching $\chi$. But our `max_z` parameter will limit how much we're actually correcting the influence matrix.
-"""
-
-# ╔═╡ 95099a21-052f-4d3e-bfc8-d251eb59f299
-begin
-	∫contour(x,p;Fn) = kelvin(x,p.x .* SA[1,1,0];Fn)*p.n[1]*p.dA
-	function ∫surface(x,p;Fn,kwargs...)
-		p.x[3]^2 > p.dA && return ∫kelvin(x,p;Fn,kwargs...) # not on waterline
-		∫kelvin(x,p;Fn,kwargs...)+∫contour(x,p;Fn)
-	end
-	∫surface_S₂(x,p;kwargs...) = ∫surface(x,p;kwargs...)+∫surface(x,reflect(p,flip=SA[1,-1,1]);kwargs...)
-end
+md"""The Kelvin wake pattern has the expected angle of around 19.5 degrees regardless of $\text{Fn}$, however the relative strength of the transverse and divergent wakes depend strongly on $\text{Fn}$. You can check this figure against a nonlinear panel method shown in Newman 1992. Our free-surface with just 64 panels matches the nonlinear results using 4160 body and free surface panels!"""
 
 # ╔═╡ 09ad2bcb-0352-4210-aac2-8841fef4374a
 md"""
-Let's test the influence of the additional integral on the wavemaking resistance over a range of Froude numbers.
+
+## Wavemaking Resistance
+
+Finally, let's take a look at the wavemaking resistance of the hull over a range of Froude numbers. The code below looks just like the previous notebook, but I'm running each $\text{Fn}$ a second time to get the estimate without the $\chi$ contribution. 
 """
 
 # ╔═╡ 51b61ee7-59b2-4be3-a1bf-d113f3f51010
-hz_32 = map(range(0.16,0.35,18)) do Fn
-	ps = (ps...,Fn=Fn)
-	q = influence(demihull;ps...)\first.(demihull.n)
-	Cw = steady_force(q,demihull;ps...)[1]
-	(Fn=Fn,Cw=Cw)
-end |> Table;
+dat = map(logrange(0.16,0.35,20)) do Fn
+	ps = (ϕ=∫surface_S₂,Fn=Fn)
+	# First with the default χ=true
+	qχ = influence(demihull;ps...)\first.(demihull.n)
+	Cwχ = steady_force(qχ,demihull;ps...)[1]
 
-# ╔═╡ 0e1c77b0-95d9-4720-94f3-41a607696068
-with_χ = map(range(0.16,0.35,18)) do Fn
-	ps = (ps...,Fn=Fn,ϕ=∫surface_S₂)
-	q = influence(demihull;ps...)\first.(demihull.n)
-	Cw = steady_force(q,demihull;ps...)[1]
-	(Fn=Fn,Cw=Cw)
+	# Again, but with χ=false
+	q = influence(demihull;χ=false,ps...)\first.(demihull.n)
+	Cw = steady_force(q,demihull;χ=false,ps...)[1]
+	(Fn=Fn,Cwχ=Cwχ,Cw=Cw)
 end |> Table;
 
 # ╔═╡ 1d69b7c9-31cf-4874-81f9-254101281228
 Plots.scatter(
-	hz_32.Fn,1e4hz_32.Cw,label="without χ contour",
+	dat.Fn,1e4dat.Cw,label="without χ contour",alpha=0.4,
 	ylims=(0,1.6),xlims=(0.15,0.353),xlabel="Fn",ylabel="5×10³ Cw",
 );Plots.scatter!(
-	with_χ.Fn,1e4with_χ.Cw,label="with χ contour")
+	dat.Fn,1e4dat.Cwχ,label="with χ contour")
 
 # ╔═╡ 99ad3816-606e-4e89-962b-c253f1727b56
 md"""
-
-The addition of the χ contour increases the influence of the free-surface panels near the bow and stern (where $n_x$ is more significant) and this reduces the $C_W$ slightly.
+Lot's of good things to notice here:
+1. First, we see the expected trend of increasing $C_w$ with $\text{Fn}$. 
+2. Unlike the submerged resistance in the last notebook, a surface piercing hull always generates waves, so $C_w>0$ for all $\text{Fn}$. 
+3. Instead of one resistance bump, we get a series of bumps as the transverse waves positively or negatively interfere along the hull.
+4. Finally, the addition of the $\chi$ contour **reduces** the $C_W$ - in agreement with linear potential flow theory.
 
 Below, I've included Baar's Neuman-Kelvin results and some experimental data wavemaking resistance data (dashed line).
 
 ![](https://github.com/weymouth/NumericalShipHydro/blob/8260a6a3d99b8d67340e82826452ad11640f5e3a/Wigley_Cw.png?raw=true)
 
-The trend of increasing $C_w$ with $Fn$ is captured. The magnitudes with the χ contour agree pretty well with the experiments, but we predict the force peaks at lower values of Fn. Our low Fn magnitudes are better than Baar's but his peaks align better with the experiments.
+ - The magnitudes with the χ contour agree pretty well with the experiments, but we predict the force peaks at lower values of Fn. 
+ - Our low Fn magnitudes are better than Baar's but his peaks align better with the experiments.
 
 ### Activity
  - Discuss the possible causes of the Fn error. What could you do to test this? 
@@ -250,13 +237,11 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
 NeumannKelvin = "~0.5.0"
 PlotlyBase = "~0.8.19"
 Plots = "~1.40.4"
-PlutoUI = "~0.7.9"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -265,7 +250,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "b99be79e44f74efd036f5c3eb566c76975ff7afa"
+project_hash = "05f84f54b7bf36b624ce654983560354937ecd02"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1133,12 +1118,6 @@ version = "1.40.9"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
-[[deps.PlutoUI]]
-deps = ["Base64", "Dates", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "Suppressor"]
-git-tree-sha1 = "44e225d5837e2a2345e69a1d1e01ac2443ff9fcb"
-uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.9"
-
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
 git-tree-sha1 = "5aa36f7049a63a1528fe8f7c3f2113413ffd4e1f"
@@ -1382,11 +1361,6 @@ version = "1.11.0"
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.7.0+0"
-
-[[deps.Suppressor]]
-git-tree-sha1 = "a819d77f31f83e5792a76081eee1ea6342ab8787"
-uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
-version = "0.2.0"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -1817,20 +1791,18 @@ version = "1.4.1+2"
 # ╟─8c6fd3d1-e895-46c9-a843-8e2511cd6d2d
 # ╠═7da113fa-7815-4452-be60-284272fd70ed
 # ╠═d00deac8-7835-4a9f-82d5-ddd74f15ced5
-# ╟─97a8846d-7a06-43fa-90c5-74f6d30dfd67
+# ╟─dee13ee2-693c-4065-aa1e-76c3b60de2e0
+# ╠═95099a21-052f-4d3e-bfc8-d251eb59f299
+# ╟─189a051c-059d-4cd7-883a-28f447062ca1
 # ╠═176ede21-5536-4e4e-96fc-1ba9377788f2
-# ╠═6e233803-f1e9-420a-89af-968d2a7a2b85
 # ╟─82c22c27-ee06-4d5a-9cf4-bc3ca177ff88
+# ╠═6e233803-f1e9-420a-89af-968d2a7a2b85
 # ╟─aaf40899-e84b-41c9-8300-02956ab342c7
 # ╟─61283274-0f84-49e3-acfe-d2f485fe6225
 # ╟─1ade87af-ca4a-4544-a704-915bab1e0586
 # ╟─4b4f0d0b-3cbc-4704-b22d-a2e9564cd85e
-# ╟─2d723831-fef3-4635-b5e7-ed6b81ee2585
-# ╟─dee13ee2-693c-4065-aa1e-76c3b60de2e0
-# ╠═95099a21-052f-4d3e-bfc8-d251eb59f299
 # ╟─09ad2bcb-0352-4210-aac2-8841fef4374a
 # ╠═51b61ee7-59b2-4be3-a1bf-d113f3f51010
-# ╠═0e1c77b0-95d9-4720-94f3-41a607696068
 # ╟─1d69b7c9-31cf-4874-81f9-254101281228
 # ╟─99ad3816-606e-4e89-962b-c253f1727b56
 # ╟─8e5e8d2a-438c-4952-99d1-ad3b28a1f10d
