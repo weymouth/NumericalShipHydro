@@ -59,7 +59,7 @@ Let's test the `kelvin` function by placing a source at $a=[0,0,Z]$ moving with 
 
 $G_{NK}(ξ,α) = \text{source}(ξ,α)-\text{source}(ξ,α')+\text{kelvin}(ξ,α')$
 
-where $\alpha'$ is the source location reflected across $z=0$ and `kelvin` combines the contributions of the `nearfield` and `wavelike` functions. The panel potential is then $\phi=∫ₚG_{NK}$ is then approximated by a cell-center quadrature.
+where $\alpha'$ is the source location reflected across $z=0$ and `kelvin` combines the contributions of the `nearfield` and `wavelike` functions. The panel potential $\phi=∫ₚG_{NK}\text{ d}a$ is then approximated by a cell-center quadrature.
 
 The plot below show the combined contribution for a submerged source.
 """
@@ -114,11 +114,11 @@ $p+\frac 12 \rho \left|\vec U + \vec u\right|^2 + \rho g z = p₀$
 
 Set $\vec U = [-U,0,0]$ and linearize by assuming $u\ll U$ on $z=\zeta \ll L$ to give
 
-$\frac ζL = \left. \text{Fn}^2\frac{\partial\phi}{\partial x}\right|_{z=0}$
+$\frac ζL = \left. \text{Fn}^2\frac{\partial\Phi}{\partial x}\right|_{z=0}$
 
 > Note that our linearization is only consistent when Fn $\ll 1$ or the depth of the disturbance is such that the amplitude stays small regardless.
 
-This is implemented in a one-liner `NeumannKelvin.ζ`.
+We use autodiff to take this derivative in a one-liner `ζ(x,y)=derivative(x->Φ(x,y,0),x)`.
 """
 
 # ╔═╡ bc0bb478-ddfd-4e13-8758-c5c1150578e9
@@ -438,7 +438,7 @@ PlutoUI = "~0.7.58"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.2"
+julia_version = "1.11.3"
 manifest_format = "2.0"
 project_hash = "7b659692f2a651364224047aebdfddccb96e3ceb"
 
