@@ -4,6 +4,18 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    #! format: off
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+    #! format: on
+end
+
 # ╔═╡ e10c5c34-2e42-4884-900b-df4d50f021e6
 begin
 	using NeumannKelvin # check for v.0.5+
@@ -11,6 +23,10 @@ begin
 	reflect(p::NamedTuple;flip=SA[1,-1,1]) = (x=reflect(p.x;flip), 
 		n=reflect(p.n;flip), dA=p.dA, x₄=reflect.(p.x₄;flip))
 end
+
+# ╔═╡ e6a5eaa4-a45a-41a9-9bf8-805a928114ee
+using PlutoUI;md""" Z/L $(@bind Zp Slider([-0.16,-0.08,-0.04,-0.02,-0.01,-0.005], default=-0.08,show_value=true)),  Fn $(@bind Fnp Slider([0.2,0.316,0.4],default=0.316,show_value=true)),  
+show G $(@bind show_green CheckBox(default=true))"""
 
 # ╔═╡ 7da113fa-7815-4452-be60-284272fd70ed
 using NeumannKelvin:kelvin,wavelike,nearfield
@@ -63,17 +79,24 @@ The big difference between ships and submersibles is that ship... aren't submerg
 
 This obvious fact has a number of big reprocussions on the flow, the linear potential flow model, and our code.
 
-Recall from the last two notebooks that the linear free-surface Green's function generates transverse and divergent waves. The transverse wavelength is set by the deep water dispersion relationship $\lambda g/U^2 = 2\pi$ therefore
+Recall from the last two notebooks that the linear free-surface Green's function generates transverse and divergent waves. The _transverse_ wavelength is set by the deep water dispersion relationship $\lambda g/U^2 = 2\pi$ therefore
 
 $\lambda/L = 2\pi \text{Fn}^2$
 
 where $\text{Fn}$ is the length-based Froude number. We'll investigate this behaviour below. 
 
-Unfortunately, the divergent wavelenth also has a strong dependance on the depth of the source, and as $z\rightarrow 0$ the divergent wavelength drops to zero directly behind the source. 
+Unfortunately, the _divergent_ wavelenth goes to zero directly behind the source, and it's amplitude decays extremely slowly when $z\approx 0$.
 
-> This means that we can't possibly integrate the panel influence using a cell-center or any other simple Gauss quadrature!!
+"""
 
-While there might be elegant ways to deal with this, I am afraid the easiest work-around is to simply limit the `kelvin` function to use some maximum argument `max_z`. (This breaks my heart after putting in so much effort to get `wavelike` working at `z=-0`.)
+# ╔═╡ 9d469b7e-db11-4bfd-9bd9-e5cd27471450
+md"""
+
+> This means that we can't possibly integrate the potential $ϕ=\int_p G_{NK}\text{ d}a$ over a panel using a cell-center estimate or any other simple Gauss quadrature when z≈0!!
+
+While there might be elegant ways to deal with this, I am afraid the easiest work-around is to simply limit the `kelvin` function to use some maximum argument `max_z`. (This breaks my heart after putting in so much effort to get `wavelike` working at `z=-0`.) 
+
+I've copy-pasted the code for `NeumannKelvin.kelvin` and added the z-limit below.
 """
 
 # ╔═╡ d00deac8-7835-4a9f-82d5-ddd74f15ced5
@@ -84,10 +107,24 @@ function NeumannKelvin.kelvin(ξ,α;Fn,max_z=-1/50)
 	(nearfield(x,y,z)+wavelike(x,abs(y),z))/Fn^2
 end
 
+# ╔═╡ e98b7843-59a9-4b91-a814-21341cef929d
+begin
+	using NeumannKelvin:source
+	function G_NK(x,y)
+		ξ = SA[x,y,0]; α = SA[0,0,Zp]; αꜛ = reflect(α,flip=SA[1,1,-1])
+		source(ξ,α)-source(ξ,αꜛ)+kelvin(ξ,αꜛ;Fn=Fnp,max_z=-0.)
+	end
+	if show_green
+		Plots.plot(logrange(1e-2,0.6,1000),y->G_NK(-1,y),c=:green,label="G_NK")
+	else
+		Plots.plot(logrange(1e-2,0.6,1000),y->Fnp^2*derivative(x->G_NK(x,y),-1.),
+			c=:blue,label="ζ")
+	end; Plots.plot!(title="transverse wake slice at x=-L",xlabel="y/L")
+end
+
 # ╔═╡ dee13ee2-693c-4065-aa1e-76c3b60de2e0
 md"""
-
-The code above shows how you can redefine a function in a package in Julia. Note that you need to define the function with the package name included. Here, I've basically copy-pasted the code for `kelvin` in the package and added the z-limit.
+> The code above shows that you need to include the package name (`NuemannKelvin.` in this case) when redefining or extending a function in a Julia package. 
 	
 ## Waterline integrals
 
@@ -95,7 +132,7 @@ There is also a new _modelling error_ we introduced when piercing the free-surfa
 
 We need to account for the change in the boundary shape with an additional integral
 
-$\Phi = Ux + \int_B q(x') G(x,x') \text{ d}a + \int_\chi \tilde q(x') G(x,x') n_x \text{ d}l$
+$\Phi = Ux + \int_B q(x') G_{NK}(x,x') \text{ d}a + \int_\chi \tilde q(x') G_{NK}(x,x') n_x \text{ d}l$
 
 The first integral is our normal panel integral over the body surface $B$, but the second is contour integral along $\chi$, the intersection between the body and $z=0$. The _linear_ source density $\tilde q$ has units of $s/l$, whereas $q$ has units of $s/a$.
 
@@ -116,7 +153,7 @@ md"""
 
 > Note that I'm testing if a panel touches $z=0$ with `z^2>dA`. 
 
-Since the Wigley hull is y-symmetric, I'll also define the $S_2$ version of `∫surface` to speed up the simulations a bit. Using this potential, we can solve for the free-surface flow on the demihull.
+Since the Wigley hull is y-symmetric, I'll also define the $S_2$ version of `∫surface` to speed up the simulations a bit. 
 
 #### Activity 
 
@@ -135,6 +172,8 @@ end
 md"""
 
 ## Predicted waterline height and wave field
+
+Using this potential, we can solve for the free-surface flow on the demihull.
 
 Let's investigate the change in the free surface elevation $\zeta$ as we change $\text{Fn}$. Using the wavelength formula above, we should have $\lambda(\text{Fn}=0.4)\approx L$ at the high speed and $\lambda(\text{Fn}=0.2)\approx L/4$ at the low speed, and we see this behaviour verified in our waterline predictions. 
 """
@@ -237,11 +276,13 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
-NeumannKelvin = "~0.5.0"
+NeumannKelvin = "~0.5.1"
 PlotlyBase = "~0.8.19"
 Plots = "~1.40.4"
+PlutoUI = "~0.7.61"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -250,7 +291,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "05f84f54b7bf36b624ce654983560354937ecd02"
+project_hash = "4c2b8d22f581f268786ed61a325dfe724d9f2679"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -262,6 +303,12 @@ weakdeps = ["ChainRulesCore", "Test"]
     [deps.AbstractFFTs.extensions]
     AbstractFFTsChainRulesCoreExt = "ChainRulesCore"
     AbstractFFTsTestExt = "Test"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "6e1d2a35f2f90a4bc7c2ed98079b2ba09c35b83a"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.3.2"
 
 [[deps.Accessors]]
 deps = ["CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "MacroTools"]
@@ -383,25 +430,21 @@ version = "0.7.8"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
-git-tree-sha1 = "26ec26c98ae1453c692efded2b17e15125a5bea1"
+git-tree-sha1 = "403f2d8e209681fcbd9468a8514efff3ea08452e"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.28.0"
+version = "3.29.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "c7acce7a7e1078a20a285211dd73cd3941a871d6"
+git-tree-sha1 = "b10d0b65641d57b8b4d5e234446582de5047050d"
 uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.12.0"
-weakdeps = ["StyledStrings"]
-
-    [deps.ColorTypes.extensions]
-    StyledStringsExt = "StyledStrings"
+version = "0.11.5"
 
 [[deps.ColorVectorSpace]]
 deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "Requires", "Statistics", "TensorCore"]
-git-tree-sha1 = "8b3b6f87ce8f65a2b4f857528fd8d70086cd72b1"
+git-tree-sha1 = "a1f44953f2382ebb937d60dafbe2deea4bd23249"
 uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
-version = "0.11.0"
+version = "0.10.0"
 weakdeps = ["SpecialFunctions"]
 
     [deps.ColorVectorSpace.extensions]
@@ -656,15 +699,15 @@ version = "3.4.0+2"
 
 [[deps.GR]]
 deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Preferences", "Printf", "Qt6Wayland_jll", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "p7zip_jll"]
-git-tree-sha1 = "9bf00ba4c45867c86251a7fd4cb646dcbeb41bf0"
+git-tree-sha1 = "0ff136326605f8e06e9bcf085a356ab312eef18a"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.73.12"
+version = "0.73.13"
 
 [[deps.GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "FreeType2_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt6Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "36d5430819123553bf31dfdceb3653ca7d9e62d7"
+git-tree-sha1 = "9cb62849057df859575fc1dda1e91b82f8609709"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.73.12+0"
+version = "0.73.13+0"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
@@ -700,6 +743,24 @@ deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll",
 git-tree-sha1 = "55c53be97790242c29031e5cd45e8ac296dadda3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "8.5.0+0"
+
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.5"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.5"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "b6d6bfdd7ce25b0f9b2f6b3dd56b2673a66c8770"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.5"
 
 [[deps.Indexing]]
 git-tree-sha1 = "ce1566720fd6b19ff3411404d4b977acd4814f9f"
@@ -924,6 +985,11 @@ git-tree-sha1 = "f02b56007b064fbfddb4c9cd60161b6dd0f40df3"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.1.0"
 
+[[deps.MIMEs]]
+git-tree-sha1 = "1833212fd6f580c20d4291da9c1b4e8a655b128e"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "1.0.0"
+
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "oneTBB_jll"]
 git-tree-sha1 = "5de60bc6cb3899cd318d80d627560fae2e2d99ae"
@@ -988,9 +1054,9 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "LinearAlgebra", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "ThreadsX", "TypedTables"]
-git-tree-sha1 = "42ac6e54fc9d4b1262711c5dcfbdb1f3fb21aa11"
+git-tree-sha1 = "716e5271e10f9c4fd5d1c6b07ec690d7903606c9"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.5.0"
+version = "0.5.1"
 
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1044,9 +1110,9 @@ version = "10.42.0+1"
 
 [[deps.Pango_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "FriBidi_jll", "Glib_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "ed6834e95bd326c52d5675b4181386dfbe885afb"
+git-tree-sha1 = "3b31172c032a1def20c98dae3f2cdc9d10e3b561"
 uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
-version = "1.55.5+0"
+version = "1.56.1+0"
 
 [[deps.Parameters]]
 deps = ["OrderedCollections", "UnPack"]
@@ -1117,6 +1183,12 @@ version = "1.40.9"
     IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "7e71a55b87222942f0f9337be62e26b1f103d3e4"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.61"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -1427,6 +1499,11 @@ version = "0.4.84"
     LazyArrays = "5078a376-72f3-5289-bfd5-ec5146d43c02"
     OnlineStatsBase = "925886fa-5bf2-5e8e-b522-a9147a512338"
     Referenceables = "42d2dcc6-99eb-4e98-b66c-637b7d73030e"
+
+[[deps.Tricks]]
+git-tree-sha1 = "6cae795a5a9313bbb4f60683f7263318fc7d1505"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.10"
 
 [[deps.TypedTables]]
 deps = ["Adapt", "Dictionaries", "Indexing", "SplitApplyCombine", "Tables", "Unicode"]
@@ -1756,9 +1833,9 @@ version = "1.59.0+0"
 
 [[deps.oneTBB_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "7d0ea0f4895ef2f5cb83645fa689e52cb55cf493"
+git-tree-sha1 = "d5a767a3bb77135a99e433afe0eb14cd7f6914c3"
 uuid = "1317d2d5-d96f-522e-a858-c73665f53c3e"
-version = "2021.12.0+0"
+version = "2022.0.0+0"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1786,9 +1863,12 @@ version = "1.4.1+2"
 
 # ╔═╡ Cell order:
 # ╟─18943a32-3c3e-44f3-8836-7cec519a2370
-# ╟─e10c5c34-2e42-4884-900b-df4d50f021e6
+# ╠═e10c5c34-2e42-4884-900b-df4d50f021e6
 # ╠═11a1fc99-a02b-441d-904e-b9be497bc7c0
 # ╟─8c6fd3d1-e895-46c9-a843-8e2511cd6d2d
+# ╟─e6a5eaa4-a45a-41a9-9bf8-805a928114ee
+# ╟─e98b7843-59a9-4b91-a814-21341cef929d
+# ╟─9d469b7e-db11-4bfd-9bd9-e5cd27471450
 # ╠═7da113fa-7815-4452-be60-284272fd70ed
 # ╠═d00deac8-7835-4a9f-82d5-ddd74f15ced5
 # ╟─dee13ee2-693c-4065-aa1e-76c3b60de2e0
