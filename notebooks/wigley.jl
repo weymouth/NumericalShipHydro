@@ -16,14 +16,6 @@ macro bind(def, element)
     #! format: on
 end
 
-# ╔═╡ e10c5c34-2e42-4884-900b-df4d50f021e6
-begin
-	using NeumannKelvin # check for v.0.5+
-	reflect(x::SVector;flip=SA[1,-1,1]) = x.*flip
-	reflect(p::NamedTuple;flip=SA[1,-1,1]) = (x=reflect(p.x;flip), 
-		n=reflect(p.n;flip), dA=p.dA, x₄=reflect.(p.x₄;flip))
-end
-
 # ╔═╡ e6a5eaa4-a45a-41a9-9bf8-805a928114ee
 using PlutoUI;md""" Z/L $(@bind Zp Slider([-0.16,-0.08,-0.04,-0.02,-0.01,-0.005], default=-0.08,show_value=true)),  Fn $(@bind Fnp Slider([0.2,0.316,0.4],default=0.316,show_value=true)),  
 show G $(@bind show_green CheckBox(default=true))"""
@@ -41,6 +33,25 @@ begin
 	@eval Main.PlutoRunner format_output(x::AbstractArray{Float64}; context = default_iocontext) = format_output_default(round.(x; digits = 3), context)	
 end;
 
+# ╔═╡ e10c5c34-2e42-4884-900b-df4d50f021e6
+begin
+	using NeumannKelvin # check for v.0.5.1+
+	reflect(x::SVector;flip=SA[1,-1,1]) = x.*flip
+	reflect(p::NamedTuple;flip=SA[1,-1,1]) = (x=reflect(p.x;flip), 
+		n=reflect(p.n;flip), dA=p.dA, x₄=reflect.(p.x₄;flip))
+
+	wigley_WL(x,B=0.1) = 0.5B*(1-(2x)^2)
+	wigley_shape(h,x=-0.5:h:0.5) = Plots.Shape(x,wigley_WL.(x))
+
+	function wigley_hull(hx,hz;L=1,B=0.1,D=1/16)
+		η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)                # parabolic width equation
+	    S(ξ,ζ) = SA[0.5L*ξ,0.5B*η(ξ,ζ),-D*ζ]    # scaled 3D surface
+	    dξ = 1/round(0.5L/hx); ξ = 0.5dξ-1:dξ:1 # sampling in ξ
+	    dζ = 1/round(D/hz); ζ = 0.5dζ:dζ:1      # sampling in ζ
+	    param_props.(S,ξ,ζ',dξ,dζ) |> Table     # broadcast over sample points
+	end
+end
+
 # ╔═╡ 18943a32-3c3e-44f3-8836-7cec519a2370
 md"""
 
@@ -51,29 +62,12 @@ For the last part of the potential flow section, we'll apply our linear solver t
 We'll use the Wigley hull, which we've seen before. I've also copy-pasted a number of the routines from the previous notebooks below.
 """
 
-# ╔═╡ 11a1fc99-a02b-441d-904e-b9be497bc7c0
-begin
-	function wigley_hull(hx,hz;L=1,B=0.1,D=1/16)
-		η(ξ,ζ) = (1-ξ^2)*(1-ζ^2)             # parabolic width equation
-	    S(ξ,ζ) = SA[0.5L*ξ,0.5B*η(ξ,ζ),-D*ζ] # scaled 3D surface
-	    dξ = 2/round(L/hx); ξ = 0.5dξ-1:dξ:1 # sampling in ξ
-	    dζ = 1/round(D/hz); ζ = 0.5dζ:dζ:1   # sampling in ζ
-	    param_props.(S,ξ,ζ',dξ,dζ) |> Table  # broadcast over sample points
-	end
-
-	wigley_WL(x,B=0.1) = 0.5B*(1-(2x)^2)
-	wigley_shape(h,x=-0.5:h:0.5) = Plots.Shape(x,wigley_WL.(x))
-
-	h = 1/32; demihull = wigley_hull(h,h)  # create panels
-	length(demihull)
-end
-
 # ╔═╡ 8c6fd3d1-e895-46c9-a843-8e2511cd6d2d
 md"""
 
 ## Surface piercing panels
 
-The big difference between ships and submersibles is that ship... aren't submerged. 
+The big difference between ships and submersibles is that ships... aren't submerged. 
 
 > A ship is a _surface piercing body_ so some of the cells touch the free surface. The depth of these cells is therefore $z \approx 0$.
 
@@ -92,7 +86,7 @@ Unfortunately, the _divergent_ wavelenth goes to zero directly behind the source
 # ╔═╡ 9d469b7e-db11-4bfd-9bd9-e5cd27471450
 md"""
 
-> This means that we can't possibly integrate the potential $ϕ=\int_p G_{NK}\text{ d}a$ over a panel using a cell-center estimate or any other simple Gauss quadrature when z≈0!!
+> This means that we can't integrate the potential $ϕ=\int_p G_{NK}\text{ d}a$ over a panel using a cell-center estimate (or any other small Gauss quadrature) when z≈0!!
 
 While there might be elegant ways to deal with this, I am afraid the easiest work-around is to simply limit the `kelvin` function to use some maximum argument `max_z`. (This breaks my heart after putting in so much effort to get `wavelike` working at `z=-0`.) 
 
@@ -137,6 +131,8 @@ $\Phi = Ux + \int_B q(x') G_{NK}(x,x') \text{ d}a + \int_\chi \tilde q(x') G_{NK
 The first integral is our normal panel integral over the body surface $B$, but the second is contour integral along $\chi$, the intersection between the body and $z=0$. The _linear_ source density $\tilde q$ has units of $s/l$, whereas $q$ has units of $s/a$.
 
 To keep things simple numerically, we will set $\tilde q \text{ d}l = q \text{ d}a$ for all panels touching $χ$. Therefore, the contour integral won't introduce any new variables, it will just add a contribution from $\chi$ to the influence of those panels.
+
+Since the Wigley hull is y-symmetric, I'll also define the $S_2$ version of `∫surface` to speed up the simulations a bit. 
 """
 
 # ╔═╡ 95099a21-052f-4d3e-bfc8-d251eb59f299
@@ -146,14 +142,15 @@ begin
 		(!χ || p.x[3]^2 > p.dA) && return ∫kelvin(x,p;Fn,dz) # no waterline
 		∫kelvin(x,p;Fn,dz)+∫contour(x,p;Fn)
 	end
+	function ∫surface_S₂(x,p;kwargs...)  # y-symmetric potentials
+	    ∫surface(x,p;kwargs...)+∫surface(x,reflect(p,flip=SA[1,-1,1]);kwargs...)
+	end
 end
 
 # ╔═╡ 189a051c-059d-4cd7-883a-28f447062ca1
 md"""
 
 > Note that I'm testing if a panel touches $z=0$ with `z^2>dA`. 
-
-Since the Wigley hull is y-symmetric, I'll also define the $S_2$ version of `∫surface` to speed up the simulations a bit. 
 
 #### Activity 
 
@@ -163,24 +160,33 @@ Since the Wigley hull is y-symmetric, I'll also define the $S_2$ version of `∫
 
 """
 
-# ╔═╡ 176ede21-5536-4e4e-96fc-1ba9377788f2
-function ∫surface_S₂(x,p;kwargs...)  # y-symmetric potentials
-    ∫surface(x,p;kwargs...)+∫surface(x,reflect(p,flip=SA[1,-1,1]);kwargs...)
-end
+# ╔═╡ 0b0d4d9d-c805-441e-a779-deae54c9cad8
+h = 1/32; demihull = wigley_hull(h,h); length(demihull)  # create panels
+
+# ╔═╡ 11a1fc99-a02b-441d-904e-b9be497bc7c0
+Plots.scatter3d(
+	eachrow(stack(demihull.x))...,label=nothing,
+	ylims=(-0.5,0.5),zlims=(-0.5,0.5),
+	marker_z=@.(last(demihull.x)^2<demihull.dA),
+	c=palette([:grey,:green], 2),
+	title = "Wigley demihull with waterline panels marked")
 
 # ╔═╡ 82c22c27-ee06-4d5a-9cf4-bc3ca177ff88
 md"""
 
 ## Predicted waterline height and wave field
 
-Using this potential, we can solve for the free-surface flow on the demihull.
+Using this potential, we can solve for the free-surface flow on the demihull plotted above.
 
 Let's investigate the change in the free surface elevation $\zeta$ as we change $\text{Fn}$. Using the wavelength formula above, we should have $\lambda(\text{Fn}=0.4)\approx L$ at the high speed and $\lambda(\text{Fn}=0.2)\approx L/4$ at the low speed, and we see this behaviour verified in our waterline predictions. 
 """
 
+# ╔═╡ f13793a7-8360-4205-af8f-5f360d89ccf8
+md"Fn = $(@bind Fnq Slider([0.2,0.316,0.4],default=0.316,show_value=true))"
+
 # ╔═╡ 6e233803-f1e9-420a-89af-968d2a7a2b85
 begin
-	ps = (ϕ=∫surface_S₂,Fn=0.316)        # NamedTuple of keyword-arguments
+	ps = (ϕ=∫surface_S₂,Fn=Fnq)        # NamedTuple of keyword-arguments
 	q = influence(demihull;ps...)\first.(demihull.n) # solve for densities
 end;
 
@@ -197,9 +203,9 @@ Below is a plot from Baar's thesis, with his Neuman-Kelvin results along with ex
 """
 
 # ╔═╡ 1ade87af-ca4a-4544-a704-915bab1e0586
-Plots.contourf(-2.5:0.04:1,0:0.05:1.5,(x,y)->2ζ(x,y,q,demihull;ps...),
-		c=:balance,aspect_ratio=:equal,clims=(-0.2,0.2));Plots.plot!(wigley_shape(h)
-	,c=:black,legend=nothing)
+Plots.contourf(-2.5:h:1,0:h:1.5,(x,y)->2ζ(x,y,q,demihull;ps...),
+	c=:balance,aspect_ratio=:equal,clims=(-0.2,0.2));Plots.plot!(
+	wigley_shape(h),c=:black,legend=nothing)
 
 # ╔═╡ 4b4f0d0b-3cbc-4704-b22d-a2e9564cd85e
 md"""The Kelvin wake pattern has the expected angle of around 19.5 degrees regardless of $\text{Fn}$, however the relative strength of the transverse and divergent wakes depend strongly on $\text{Fn}$. You can check this figure against a nonlinear panel method shown in Newman 1992. Our free-surface with just 64 panels matches the nonlinear results using 4160 body and free surface panels!"""
@@ -244,13 +250,13 @@ Below, I've included Baar's Neuman-Kelvin results and some experimental data wav
 
 ![](https://github.com/weymouth/NumericalShipHydro/blob/8260a6a3d99b8d67340e82826452ad11640f5e3a/Wigley_Cw.png?raw=true)
 
- - The magnitudes with the χ contour agree pretty well with the experiments, but we predict the force peaks at lower values of Fn. 
- - Our low Fn magnitudes are better than Baar's but his peaks align better with the experiments.
+At low $\text{Fn}$, we predict the forces well, but at higher $\text{Fn}$ we are predicting the peaks earlier and with slightly larger values than Baar or the experiments.
 
 ### Activity
- - Discuss the possible causes of the Fn error. What could you do to test this? 
- - Do you think the comparison is reasonable given our in-built modelling error?
- - What types of measurements would you expect this solver to be even worse at predicting?
+ - Discuss the possible causes of the higher $\text{Fn}$ error. What could you do to test this?
+ - Check how long it took you to run the 40 free-surface resistance calculations above. How long do you guess a CFD run will take?
+ - For which types of predictions you could use this solver, and for which might you need CFD (regardless of cost).
+
 
 And that's it! We are done with the potential flow lectures! 
 
@@ -258,14 +264,14 @@ And that's it! We are done with the potential flow lectures!
 
 Your assignment is to group up with one other person and carry our your own research study using the Neumann-Kelvin package, or another potential flow solver. 
 
-You need to submit your report **as a Pluto notebook** and it should be structured with as a *brief* introduction & problem description, methodology & validation, results & discussion.
- - Intro & problem description: What are you studying and why?
- - Methodology & validation: How have you set up your study, why did you do it that way, and how do you know its working?
- - Results & discussion: What are your findings and what do they mean?
+You need to submit your report **as a Pluto notebook** with a *brief* introduction & problem description, methodology & validation, results & discussion.
+ 1. **Intro & problem description:** What are you studying and why?
+ 2. **Methodology & validation:** How have you set up your study, why did you do it that way, and how do you know its working?
+ 3. **Results & discussion:** What are your findings and what do they mean?
 
 The topic needs to be different that what we covered in class. However, this is an assignment, so limit your scope to something you can get done in a few days. Here are some potential topic categories:
- - Design parameter study for a ship or submersible: A significantly new geometry, and/or use a new post-processing metric. 
- - Study or extend one of the numerical aspect of the code: A new input type or Greens function or a detailed study of something you want to know more about.
+ - Design parameter study for a ship or submersible: A significantly new geometry, and/or use a new post-processing metric. *These projects typically have a "right answer" and I'll be more strict marking them.*
+ - Study or extend one of the numerical aspect of the code: A new input type or Greens function or a detailed study of something you want to know more about. *These projects are more open ended, so clear thinking is more important than sucessful results.*
 
 The due date will be posted on Brightspace. Have fun!
 """
@@ -281,7 +287,7 @@ PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 [compat]
 NeumannKelvin = "~0.5.1"
 PlotlyBase = "~0.8.19"
-Plots = "~1.40.4"
+Plots = "~1.40.9"
 PlutoUI = "~0.7.61"
 """
 
@@ -289,9 +295,9 @@ PlutoUI = "~0.7.61"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.3"
+julia_version = "1.11.2"
 manifest_format = "2.0"
-project_hash = "4c2b8d22f581f268786ed61a325dfe724d9f2679"
+project_hash = "532ceb758c517b345b3239500c4a5b2c909f8c85"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1863,8 +1869,7 @@ version = "1.4.1+2"
 
 # ╔═╡ Cell order:
 # ╟─18943a32-3c3e-44f3-8836-7cec519a2370
-# ╠═e10c5c34-2e42-4884-900b-df4d50f021e6
-# ╠═11a1fc99-a02b-441d-904e-b9be497bc7c0
+# ╟─e10c5c34-2e42-4884-900b-df4d50f021e6
 # ╟─8c6fd3d1-e895-46c9-a843-8e2511cd6d2d
 # ╟─e6a5eaa4-a45a-41a9-9bf8-805a928114ee
 # ╟─e98b7843-59a9-4b91-a814-21341cef929d
@@ -1874,8 +1879,10 @@ version = "1.4.1+2"
 # ╟─dee13ee2-693c-4065-aa1e-76c3b60de2e0
 # ╠═95099a21-052f-4d3e-bfc8-d251eb59f299
 # ╟─189a051c-059d-4cd7-883a-28f447062ca1
-# ╠═176ede21-5536-4e4e-96fc-1ba9377788f2
+# ╠═0b0d4d9d-c805-441e-a779-deae54c9cad8
+# ╟─11a1fc99-a02b-441d-904e-b9be497bc7c0
 # ╟─82c22c27-ee06-4d5a-9cf4-bc3ca177ff88
+# ╟─f13793a7-8360-4205-af8f-5f360d89ccf8
 # ╠═6e233803-f1e9-420a-89af-968d2a7a2b85
 # ╟─aaf40899-e84b-41c9-8300-02956ab342c7
 # ╟─61283274-0f84-49e3-acfe-d2f485fe6225
