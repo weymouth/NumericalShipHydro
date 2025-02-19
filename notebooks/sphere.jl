@@ -163,6 +163,14 @@ begin
 	A*q ≈ b && "Solved!"
 end
 
+# ╔═╡ e4876085-f4ac-4e33-8230-773e7206b822
+begin
+	using Measures
+	plt1=heatmap(A,yflip=true,colorbar_title="A")
+	plt2=plot(x,b,xlabel="x/R",margin=5mm,label="b/U",xlims=(-1,1),ylims=(-1,1))
+	plot(plt1,plt2,layout=(1,2),size=(700,300))
+end
+
 # ╔═╡ 6d5d2289-15df-47ba-82ff-2d5bf18627de
 md"""
 This is a complete panel method! In four lines of code!! (Of course, it depends on defining `ϕ=NeumannKelvin.∫G` above).
@@ -180,32 +188,40 @@ We got the solution to the linear system we created, but was that the right syst
 First, lets **verify** that the influence matrix and excitation vector values are reasonable.
 """
 
-# ╔═╡ e4876085-f4ac-4e33-8230-773e7206b822
-begin
-	plt1=heatmap(A,yflip=true,colorbar_title="A")
-	plt2=heatmap(inv.(A),yflip=true,colorbar_title="inv.(A)")
-	plot(plt1,plt2,layout=(1,2),size=(700,270))
-end
-
-# ╔═╡ 06a9e3db-ef2f-4236-8ab0-8adbaca743bc
-plot(x,b,xlabel="x/R",ylabel="b/U",label=nothing,size=(400,270))
-
 # ╔═╡ f9755b5a-cca1-4f7d-ae53-ffee8caaa9ff
 md"""
-The matrix is diagonally dominant with a value around 6, and the off diagonals get as small as 1/15. Does that make sense?
+ - The matrix is diagonally dominant with a value around 6. The velocity induced by a panel on it's own surface should be exactly $2\pi q$ so the diagonal magnitude looks right.
+ - The $b$ vector also looks correct, since $b = n_x = x/R$ for the sphere. 
 
- - The diagonal value is the self-induced velocity of the panel in the normal direction. We found earlier that this is exactly $u_n/q = 2\pi$ so the diagonal magnitude looks right.
-
- - The off diagonals are the influence of one panel on another. The smallest values will be antipodes, at a distance of $2R$. Then $u_n/q \approx (h/2R)^2 = 1/16$, so this matches as well.
-
-The $b$ vector also looks correct, since $b = n_x = x/R$ for the sphere. 
+As another basic check, we can plot the flow around the sphere. First we need to implement the equation for the total potential $\Phi(x)=\sum q_i φ_i(x)$, and the velocity $\vec u=\vec \nabla\Phi$. Then we can plot the flow at any point. Below I show the flow on the $z=0$ plane.
 """
+
+# ╔═╡ d0cc0f66-f871-417a-90d9-8aea80cc3f30
+begin
+	# Functions to compute disturbance potential and velocity
+	Φ(x,q,panels) = q'*ϕ.(Ref(x),panels) # Ref(x) keeps x constant in the sum
+	∇Φ(x,q,panels) = gradient(x->Φ(x,q,panels),x)
+end
+
+# ╔═╡ 1bdfe380-b712-4525-9cdf-4d8cb7e31a24
+let	# Plot u,v vectors on ⃗x=(x,y,z=0) plane
+	np,Δt = 30,0.2
+	X,Y = range(-3,3,np)*ones(np)',ones(np)*range(-2,2,np)'
+	u(x,y) = ∇Φ(SA[x,y,0],q,panels)+SA[-1,0,0] # include uniform flow
+	U = stack(Δt .* u.(X,Y))
+	quiver(X,Y,quiver=(view(U,1,:,:),view(U,2,:,:)),aspect_ratio=:equal)
+	plot!(Shape(cos.(0:0.1:2π),sin.(0:0.1:2π)),c=:grey,label=nothing)
+end
 
 # ╔═╡ 80b175b6-f2ec-49c7-84f1-9addd5ca7d18
 md"""
+Looks good!
+ - The flow seems to be wrapping around the circle, so the boundary condition is being enforced!
+ - The arrow look a little smaller near the stagnation points and a little longer around the poles. But it is hard to tell for sure using a *qualitative* plot like this one...
+
 ## Validation and Convergence
 
-Next, lets **validate** the method, comparing the numerical solution to a known exact solution.
+To **validate** the method, we need to make a *quantitative* comparison to a known exact solution.
 
 The analytic potential flow surface velocity on the sphere is
 
@@ -216,10 +232,6 @@ where $\alpha$ is the angle of the surface point with respect to the flow direct
 
 # ╔═╡ 708e7a92-95d0-43af-9805-047399dc38a3
 begin
-	# Functions to compute disturbance potential and velocity
-	Φ(x,q,panels) = q'*ϕ.(Ref(x),panels)
-	∇Φ(x,q,panels) = gradient(x->Φ(x,q,panels),x)
-
 	# Velocity magnitude |u| on panel centroids
 	abs_u(q,panels) = map(x->hypot(SA[-1,0,0]+∇Φ(x,q,panels)...),panels.x)
 	
@@ -313,6 +325,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Measures = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
 NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
@@ -320,7 +333,8 @@ TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
 
 [compat]
 ForwardDiff = "~0.10.38"
-NeumannKelvin = "~0.4.0"
+Measures = "~0.3.2"
+NeumannKelvin = "~0.5"
 Plots = "~1.40.9"
 StaticArrays = "~1.9.10"
 TypedTables = "~1.4.6"
@@ -330,9 +344,9 @@ TypedTables = "~1.4.6"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.2"
+julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "266df1b14df70a034244e728479848bbc1b90b1f"
+project_hash = "3372e906bb6822606592b6b6dd6c0ddfed945e8b"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1070,9 +1084,9 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "LinearAlgebra", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "ThreadsX", "TypedTables"]
-git-tree-sha1 = "3d3d37b93344fe9d6728b6f1690b09dfbfc50cd8"
+git-tree-sha1 = "716e5271e10f9c4fd5d1c6b07ec690d7903606c9"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.4.3"
+version = "0.5.1"
 
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1866,8 +1880,9 @@ version = "1.4.1+2"
 # ╠═e5ce94d5-5fdc-44d3-9009-6455624e9244
 # ╟─6d5d2289-15df-47ba-82ff-2d5bf18627de
 # ╟─e4876085-f4ac-4e33-8230-773e7206b822
-# ╟─06a9e3db-ef2f-4236-8ab0-8adbaca743bc
 # ╟─f9755b5a-cca1-4f7d-ae53-ffee8caaa9ff
+# ╠═d0cc0f66-f871-417a-90d9-8aea80cc3f30
+# ╟─1bdfe380-b712-4525-9cdf-4d8cb7e31a24
 # ╟─80b175b6-f2ec-49c7-84f1-9addd5ca7d18
 # ╠═708e7a92-95d0-43af-9805-047399dc38a3
 # ╟─3fcfafb1-e71e-4965-85bc-e2fdaac46778
