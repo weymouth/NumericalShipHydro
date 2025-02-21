@@ -95,7 +95,7 @@ where $\vec x = (\vec\xi-\vec a')\frac g{U^2}$ is the Froude-scaled vector from 
 
 $N = \frac 2\pi\int_{-1}^1 N_i(\vec x,T) dT,\quad W = 4 H(-x)\int_{-\infty}^\infty W_i(\vec x,T) dT$
 
-where $T$ is the variable of integration (related to the wave direction) and $H$ is the heavyside function, ensuring $W(x\ge 0)=0$, ie there is no wave-like disturbance upstead of the source. 
+where $T$ is the variable of integration (related to the wave direction) and $H$ is the heavyside function, ensuring $W(x\ge 0)=0$, ie there is no wave-like disturbance upstream of the source. 
 
 The integrands are
 
@@ -137,10 +137,6 @@ Overall we can see:
 The highly oscillatory $W_i$ can require 1M(!) function evaluations, which is clearly a problem. But $N_i$ is also an issue because the exponential integral is a really expensive function!
 
 The code block below runs $O(10^3)$ $\vec x$ cases. `quadgk` is remarkably robust and efficient, but our free surface green's function will be **$O(10^5)$ times** more expensive than the source green function if we use it.
-
-## Activity
- - How many times will we need to evaluate the green function $\varphi$ in a 200 panel simulation? What about 2000 panels?
- - How much time can we spend improving this quadrature and still come out ahead?
 "
 
 # ╔═╡ f2c88e9f-0af5-4b8d-91ea-8ec58782e0a2
@@ -158,6 +154,11 @@ x_cases = reduce(vcat,(-R*cos(atan(a)),R*sin(atan(a)),-z)
 
 # ╔═╡ a7c23f1c-f553-4607-8e06-d8c096260f8f
 md"""
+
+## Activity
+ - How many times will we need to evaluate the green function $\varphi$ in a 200 panel simulation? What about 2000 panels?
+ - How much time can we spend improving this quadrature and still come out ahead?
+
 ### 2. Machine Learning
 
 These days, AI and [machine learning](https://en.wikipedia.org/wiki/Machine_learning) are the first solution to *any* problem. Despite all the hype, this isn't a remotely new idea in science & engineering - we've been "curve fitting" since [Legendre and Gauss developed least-squares regression in 1800](https://en.wikipedia.org/wiki/Least_squares#The_method)!
@@ -268,13 +269,13 @@ As you can see in the plot below, this path **completely** removes the oscillati
 zs2 = @bind z2 Slider([-1,-0.1,-0.01,-0.001],default=-0.1,show_value=true); md"""$zs2"""
 
 # ╔═╡ 9f52c359-7a84-4c03-87d8-3b17a5f93f44
-let;z = z2
+let;z = z2; x=-2
 	# Centerline integrand
 	Wi(t) = imag(exp(z*(1+t^2)+im*(x*sqrt(1+t^2))))
 	
 	# Plot vs T
 	b = √(-3log(10)/z)
-	plt1 = plot(range(-b,b,1000),Wi,title="integrand for y=0",
+	plt1 = plot(range(-b,b,1000),Wi,title="integrand for x=-2, y=0",
 		xlabel="T",ylabel="Wᵢ(T)",label="")
 	
 	# Complex path
@@ -291,7 +292,7 @@ end
 md"""
 ### 3c. Numerical *Nearly*-Stationary Phase
 
-The example above show this works great on the centerline, but this method has never been robustly applied to the general wavelike integral...until now. 
+The example above show this works great on the centerline when $x^2\gg z^2$, but this method could not be robustly applied for general $\vec x$ locations...until now. 
 
 Gibbs & Huybrechs developed a robust version of stationary phase integration in 2024 (finally a modern contribution!). Their approach was to use Gauss-Legendre within a *finite* phase-change radius of the stationary points and use the stationary phase paths outside that radius. 
 
