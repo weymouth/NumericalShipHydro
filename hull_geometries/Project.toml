@@ -1,0 +1,13 @@
+[deps]
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+NURBS = "dde13934-061e-461b-aa91-2c0fad390a0d"
+NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
+PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
+Pluto = "c3e4b0f8-55cb-11ea-2926-15256bba5781"
+
+[compat]
+FileIO = "1.16.6"
+NURBS = "0.8.0"
+NeumannKelvin = "0.5.1"
+PlotlyJS = "0.18.15"
+julia = "1"
