@@ -151,20 +151,12 @@ begin
 	# Construct A using outer product broadcast
 	A = ∂ₙϕ.(panels,panels')
 
-	# Construct b = [1,0,0]⋅n̂ = nₓ
+	# Construct b = -Uₙ = [1,0,0]⋅n̂ = nₓ
 	b = first.(panels.n)
 	
 	# solve & check that it worked
 	q = A \ b 
 	A*q ≈ b && "Solved!"
-end
-
-# ╔═╡ e4876085-f4ac-4e33-8230-773e7206b822
-begin
-	using Measures
-	plt1=heatmap(A,yflip=true,colorbar_title="A")
-	plt2=plot(x,b,xlabel="x/R",margin=5mm,label="b/U",xlims=(-1,1),ylims=(-1,1))
-	plot(plt1,plt2,layout=(1,2),size=(700,300))
 end
 
 # ╔═╡ 6d5d2289-15df-47ba-82ff-2d5bf18627de
@@ -181,27 +173,21 @@ We got the solution to the linear system we created, but was that the right syst
 
 > 4. _How should we determine if a method is working?_ 
 
-First, lets **verify** that the influence matrix and excitation vector values are reasonable.
-"""
+As a first *sanity check*, we can plot the flow around the sphere. First we need to implement the equation for the total potential $\Phi(x)=\sum q_i φ_i(x)$, and the velocity $\vec u=\vec \nabla\Phi$. Then we can plot the flow at any point. 
 
-# ╔═╡ f9755b5a-cca1-4f7d-ae53-ffee8caaa9ff
-md"""
- - The matrix is diagonally dominant with a value around 6. The velocity induced by a panel on it's own surface should be exactly $2\pi q$ so the diagonal magnitude looks right.
- - The $b$ vector also looks correct, since $b = n_x = x/R$ for the sphere. 
-
-As another basic check, we can plot the flow around the sphere. First we need to implement the equation for the total potential $\Phi(x)=\sum q_i φ_i(x)$, and the velocity $\vec u=\vec \nabla\Phi$. Then we can plot the flow at any point. Below I show the flow on the $z=0$ plane.
+Below I show the flow on the $z=0$ plane, but **Note that the geometry and flow are 3D!**
 """
 
 # ╔═╡ d0cc0f66-f871-417a-90d9-8aea80cc3f30
 begin
 	# Functions to compute disturbance potential and velocity
-	Φ(x,q,panels) = q'*ϕ.(Ref(x),panels) # Ref(x) keeps x constant in the sum
-	∇Φ(x,q,panels) = gradient(x->Φ(x,q,panels),x)
+	Φ(x,q,panels) = q'ϕ.(Ref(x),panels)           # weighted sum
+	∇Φ(x,q,panels) = gradient(x->Φ(x,q,panels),x) # AutoDiff
 end
 
 # ╔═╡ 1bdfe380-b712-4525-9cdf-4d8cb7e31a24
 let	# Plot u,v vectors on ⃗x=(x,y,z=0) plane
-	np,Δt = 30,0.2
+	np,Δt = 20,0.2
 	X,Y = range(-3,3,np)*ones(np)',ones(np)*range(-2,2,np)'
 	u(x,y) = ∇Φ(SA[x,y,0],q,panels)+SA[-1,0,0] # include uniform flow
 	U = stack(Δt .* u.(X,Y))
@@ -229,7 +215,7 @@ where $\alpha$ is the angle of the surface point with respect to the flow direct
 # ╔═╡ 708e7a92-95d0-43af-9805-047399dc38a3
 begin
 	# Velocity magnitude |u| on panel centroids
-	abs_u(q,panels) = map(x->hypot(SA[-1,0,0]+∇Φ(x,q,panels)...),panels.x)
+	abs_u(q,panels) = map(x->norm(∇Φ(x,q,panels)-SA[1,0,0]),panels.x)
 	
 	# Get the angle and velocity
 	function alpha_velocity(panels)
@@ -304,7 +290,7 @@ This notebook develops a 3D potential flow panel method and tests it's predictio
 
 We were careful to visually and quantitatively check our intermediate results **at every step along the way**
  - We plotted the geometry and verified that every panel $dA\sim h^2$ and the total $A\approx 4\pi$.
- - We plotted the influence matrix and source vector and checked their values matched expectations for our test case.
+ - We plotted the flow and visually checked the boundary conditions were enforced.
  - We validated $|u|$ and $M$ by comparing to the analytic solution for the sphere, and demonstrated the numerical convergence with $h$.
 
 The same three-part proceedure and careful verification and validation will be present for every example we use in this class (and hopefully in your work in the future as well).
@@ -321,7 +307,6 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-Measures = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
 NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
@@ -329,7 +314,6 @@ TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
 
 [compat]
 ForwardDiff = "~0.10.38"
-Measures = "~0.3.2"
 NeumannKelvin = "~0.5"
 Plots = "~1.40.9"
 StaticArrays = "~1.9.10"
@@ -342,7 +326,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "3372e906bb6822606592b6b6dd6c0ddfed945e8b"
+project_hash = "fde1a561f956c088a1261f5b064bbf6ac5251cf8"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1875,8 +1859,6 @@ version = "1.4.1+2"
 # ╟─1719d47e-5861-481a-8398-84c92e58fbb1
 # ╠═e5ce94d5-5fdc-44d3-9009-6455624e9244
 # ╟─6d5d2289-15df-47ba-82ff-2d5bf18627de
-# ╟─e4876085-f4ac-4e33-8230-773e7206b822
-# ╟─f9755b5a-cca1-4f7d-ae53-ffee8caaa9ff
 # ╠═d0cc0f66-f871-417a-90d9-8aea80cc3f30
 # ╟─1bdfe380-b712-4525-9cdf-4d8cb7e31a24
 # ╟─80b175b6-f2ec-49c7-84f1-9addd5ca7d18
