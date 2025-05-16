@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.4
+# v0.20.8
 
 using Markdown
 using InteractiveUtils
@@ -42,34 +42,30 @@ where `θ₁,θ₂` are the azimuth and polar angles.
 """
 
 # ╔═╡ 0576ce9d-dd33-4b20-915a-24421037d7c0
-"""
-    sphere(h;R=1) -> Table(panel_props)
-
-Sample a sphere of radius `R` such that the arc-length ≈ h in each direction.
-θ₁=[0,π]: azimuth angle, θ₂=[0,2π]: polar angle.
-"""
-function sphere(h;R=1)
-    S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)]
-    dθ₁ = π/round(π*R/h) # azimuth step size
-	# # A uniform polar step works, but is not ideal...
-	# param_props.(S,(0.5dθ₁:dθ₁:π)',0.5dθ₁:dθ₁:2π,dθ₁,dθ₁) |> Table
-	
-	# Set the polar step based on radius at this azimuth
-    mapreduce(vcat,0.5dθ₁:dθ₁:π) do θ₁
-        dθ₂ = 2π/round(2π*R*sin(θ₁)/h) # polar step size at this azimuth
-        param_props.(S,θ₁,0.5dθ₂:dθ₂:2π,dθ₁,dθ₂) |> Table
-    end
+function sphere(h,R=1)
+    S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)] # sphere eq
+    dθ = π/round(π*R/h) # angle step size s.t. dθR ≈ h & 2πR=hN₂
+	θ₁ = 0.5dθ:dθ:π     # latitude sampling [0,π]
+	θ₂ = 0.5dθ:dθ:2π    # longitude sampling [0,2π]
+	p = param_props.(S,θ₁',θ₂,dθ,dθ) # measure panel properties
+	return Table(p)     # return as a Table
 end
 
 # ╔═╡ 71df011e-bf21-47c3-85f0-18a9aca54fee
 md"""
-The function sets the azimuth and polar spacings so each panel's arc length is approximately $h$. Then, it evaluates the function `S(θ₁,θ₂)` at those spacings, filling a vector with all the panel information using the `param_props` function defined in `NeumannKelvin.jl`. 
+This function is the longest we've made so far (6 lines!) but each line is very simple:
+1. Define the function `S(θ₁,θ₂)`, which looks identical to the equation.
+2. Set the spacing so the panels at the equator are approximately $h \times h$.
+3. Define a uniform sampling from pole-to-pole (latitudes).
+4. Define a uniform sampling around the equator (longitudes).
+5. Define the panels by calling the function `param_props` (defined in `NeumannKelvin.jl`) at each sample point using the transpose (`'`) and broadcast (`.`) notation.
+6. Turn this panel data into a `Table` for pretty printing.
 
 Let's set the panel size to `h=0.5R` and create an array of panels.
 """
 
 # ╔═╡ ceaa01da-9fba-454f-8a98-a13874f72295
-h = 0.5; panels = sphere(h); display(panels)
+h,R = 0.5,1.; panels = sphere(h,R); display(panels)
 
 # ╔═╡ 6a2f8a49-6a92-45ac-b538-74f478594033
 md"""
@@ -81,30 +77,30 @@ Let's start by plotting the centroids.
 # ╔═╡ 7d7397ad-8f64-41c8-9742-62921d21be9c
 begin 
 	# Split the centroids (`panels.x`) into  `x,y,z` vectors for plotting
-	x,y,z = eachrow(stack(panels.x));
-	N=length(panels)
+	x,y,z = eachrow(stack(panels.x))
+	N = length(panels)
 	plot(x,y,z,legend=false,title="Sphere represented with $N panels")
 end
 
 # ╔═╡ 44da77a5-8fbc-40f8-a3c5-1006295dd59e
 md"""
-Next let's verify the panels have the correct total area $4\pi R^2$ and all the panels have an area colse to $h^2$.
+Next let's plot the area $dA_i$ of each panel against $z$ and verify the panels have the correct **total area** $\sum dA=4\pi R^2$.
 """
 
 # ╔═╡ 75db3a69-1e06-4482-9df0-a77451ceb005
 begin
 	A_error = sum(panels.dA)/4π-1
-	plot(z,panels.dA/h^2,ylim=(0,2),xlabel="z",ylabel="dA/h²",legend=false, 
+	plot(z,panels.dA/h^2,ylim=(0,1.5),xlabel="z",ylabel="dA/h²",legend=false, 
 		title="Total surface area error: $(round(100A_error,digits=1))%")
 end
 
 # ╔═╡ b40064aa-c1b6-46c6-86fc-87661b3d4d27
 md"""
 #### Activity
- - Discuss why a uniform panel size might be a good idea for this problem.
- - What happens if we use a constant dθ₂=dθ₁? Try it, but fix if needed.
+ - Why aren't the panel areas uniform? 
+ - What would be an advantage of uniformly sized panels, and how could you achieve this?
 
-Note that the number of panels is approximately $N\approx 4\pi R^2/h^2$. This shows that $N \sim 1/h^2$, which should worry you if you think about how much work it will be to solve for the flow on these panels.
+Note that the number of panels scales with $N \sim R^2/h^2$. Keep this in mind when we discuss how much work it takes to solve for the flow on these panels below.
 """
 
 # ╔═╡ 5e3f59e0-92a6-486e-8e62-67d282d5821e
@@ -1873,7 +1869,7 @@ version = "1.4.1+2"
 # ╟─6a2f8a49-6a92-45ac-b538-74f478594033
 # ╠═7d7397ad-8f64-41c8-9742-62921d21be9c
 # ╟─44da77a5-8fbc-40f8-a3c5-1006295dd59e
-# ╟─75db3a69-1e06-4482-9df0-a77451ceb005
+# ╠═75db3a69-1e06-4482-9df0-a77451ceb005
 # ╟─b40064aa-c1b6-46c6-86fc-87661b3d4d27
 # ╟─5e3f59e0-92a6-486e-8e62-67d282d5821e
 # ╟─1719d47e-5861-481a-8398-84c92e58fbb1

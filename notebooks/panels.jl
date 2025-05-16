@@ -43,7 +43,7 @@ This plot is generated with [Julia](https://julialang.org/) which has many advan
 
 ![Julia benchmarks](https://julialang.org/assets/images/benchmarks.svg)
 
-The syntax is similar to Python and MATLAB. By the end of this notebook, you'll have the basics covered. 
+The syntax is similar to Python and MATLAB, **but better!** By the end of this notebook, you'll have the basics covered. 
 """
 
 # ╔═╡ 9b6b5d2b-a2f1-4378-9ae3-a9de62912d56
@@ -214,8 +214,7 @@ md"""n $(nslide = @bind n Slider(1:6,default=2,show_value=true))"""
 # ╔═╡ 91391364-b204-460c-9132-e3b2bbb0cc18
 begin
 	using FastGaussQuadrature
-	# xgl,wgl = [-1/√3,1/√3],[1,1] # n=2 Gauss points
-	xgl,wgl = gausslegendre(n)     # works for any n
+	xgl,wgl = gausslegendre(n)
 end
 
 # ╔═╡ 92f1ff02-608a-45b8-a780-2436687b0f2f
@@ -225,7 +224,7 @@ md"Let's try this out on a test function:"
 test_cubic(x) = x^3-3x^2+x
 
 # ╔═╡ d230eca8-e356-4b40-bf4a-0bd083d99f27
-md"The integral of this function from -1...1 is -2. Let's sample the function at the special Gauss points:"
+md"The integral of this function over [-1,1] is -2. Let's sample the function at the special Gauss points:"
 
 # ╔═╡ 9cb4efe4-cafc-4c20-83da-665ef707b9dc
 map(test_cubic,xgl)
@@ -266,11 +265,11 @@ wgl'map(test_cubic,xgl) # juxtaposition (like 2pi = 2*pi)
 
 # ╔═╡ a397cafe-3e42-41d8-8576-9d304c7dbee6
 md"""
-Although (in this case) the `for`-loop is the fastest, I hope you agree that the inner-product is the nicest way to do the weighted sum! 
+I think that the inner-product is the nicest way to do the weighted sum, but feel free to use more explicit methods like the `sum` comprehension in your own code if you prefer!
 
 Now let's turn this into a quadrature function that will work with any input function `f`. And we'll also use a change of variable to enable any integration range:
 
-$\int_a^b f(x) dx = \int_{-1}^1 \frac{b-a}2 f\left(\frac{a+b}2+\frac{b-a}2 t\right)dt$
+$\int_a^b f(x) dx = \frac{b-a}2 \int_{-1}^1 f\left(\frac{a+b}2+\frac{b-a}2 t\right)dt$
 """
 
 # ╔═╡ 97682af1-bebc-49a2-9d5f-ad0acf7ddd34
