@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.4
+# v0.20.8
 
 using Markdown
 using InteractiveUtils
@@ -37,21 +37,25 @@ Step 2 is by far the easiest because it is the same every time.
 
 Step 3 is harder, but as engineers we are typically interested in measuring similar quantities repeatedly, such as the added mass. After carefully writing and validating a post-processing code once, you can use it forever! 
 
-Step 1 is typically the hardest because every problem is different. Even for the extremely simple example of the sphere, we found it was helpful to use a non-uniform step angle $d\theta_2$ to keep the panels around the same size:
+Step 1 is typically the hardest because every problem is different. Even for the extremely simple example of the sphere, we found the areas of the panels were far from uniform, reducing our efficiency. The code below uses a different longitudinal step angle at each lattitude to keep the panels around the same size:
 """
 
 # ╔═╡ dfa6d033-9253-47d3-85ad-9f13b4c4d5d3
 function sphere(h;R=1)
     S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)]
     dθ₁ = π/round(π*R/h) # azimuth step size
-    # A uniform polar step angle makes tiny wedge panels near the poles!
+    # Code from last notebook:
+	# Constant longitudinal _angle_ which makes the pole panels very small
     # param_props.(S,(0.5dθ₁:dθ₁:π)',0.5dθ₁:dθ₁:2π,dθ₁,dθ₁) |> Table
 
-    # Set the polar step angle based on radius at this azimuth
-    mapreduce(vcat,0.5dθ₁:dθ₁:π) do θ₁
-        dθ₂ = 2π/round(2π*R*sin(θ₁)/h) # ≈ constant polar _distance_
-        param_props.(S,θ₁,0.5dθ₂:dθ₂:2π,dθ₁,dθ₂) |> Table
+    # New code for dA ≈ contant:
+	function latitude(θ₁) # measure panels on a given latitude 
+        dθ₂ = 2π/round(2π*R*sin(θ₁)/h) # set angle for ≈ constant _distance_
+        param_props.(S,θ₁,0.5dθ₂:dθ₂:2π,dθ₁,dθ₂) |> Table # make panels
     end
+	## latitudes = map(latitude,0.5dθ₁:dθ₁:π)) # map to get all the latitudes
+	## vcat(latitudes...)                      # concantenate panels together
+	mapreduce(latitude,vcat,0.5dθ₁:dθ₁:π)      # map and vcat in one step!!
 end
 
 # ╔═╡ eae81e8a-2173-4898-a36c-c6b559c814ee
@@ -223,16 +227,18 @@ q_big[1:end÷4] ≈ q ? "it matches!! 🥳" : "it doesn't match... 🤢"
 md"""
 We can see that `A_big` has 0.4M elements! That is 16× the number of elements as `A` and it take *more than* 16× as long to set up and solve. Unfortunately, the solutions don't match without spending the extra time using the combined panels.
 
-We can see below that the results using only `demihull` don't just need to be multiplied by 4 - they are fundamentally unphysical!
- - The added mass matrix is not diagonal. Because the demihull isn't symmetric, it produces forces in $y$ when accelerating in $z$ and vis-versa. 
- - The values on the diagonal are all over the place. $m_{xx}$ is 7× too small and the others are 1.5-1.8× off.
+If we look at the added mass of the double body (scaled by the `2D` to account for the doubled draft) we can see the correct behaviour. 
+ - The added mass is diagonal, meaning motion in a direction only results in force in that direction. This is correct for symmetric bodies. 
+ - The `m₁₁` value is smallest and `m₂₂` is largest. This is correct since the body is most streamlined in x and least in y. 
+
+Unfortunately, `m₁₁` using the half body (scaled by `0.5B`) is not correct! Of course, this won't work until the flow around the full body is correctly captured...
 """
 
-# ╔═╡ 8a18dd5a-2e6b-4485-b9e4-01c34a7d32c8
-added_mass(demihull;ϕ=∫G)/(B*D) # This isn't correct!
-
 # ╔═╡ 2aed92b1-0829-47e3-a560-c58e6aa899e8
-added_mass(double_body;ϕ=∫G)/(B*D) # diagonal & mₓₓ is 7× bigger!
+M = added_mass(double_body;ϕ=∫G)/(B*2D) # diagonal ✓ 
+
+# ╔═╡ 8a18dd5a-2e6b-4485-b9e4-01c34a7d32c8
+added_mass(demihull;ϕ=∫G)[1,1]/(0.5B*D) ≈ M[1,1] ? "it matches!! 🥳" : "it doesn't match... 🤢" 
 
 # ╔═╡ 4ae2c8c2-f5a5-4b6d-ab8c-16b25a4ecf4e
 md"""
@@ -272,7 +278,7 @@ Plots = "~1.40.9"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.2"
+julia_version = "1.11.5"
 manifest_format = "2.0"
 project_hash = "1a8558287b38dd4079a4199b88e8328a35847487"
 
@@ -1030,7 +1036,7 @@ version = "0.3.27+1"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+2"
+version = "0.8.5+0"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
@@ -1840,8 +1846,8 @@ version = "1.4.1+2"
 # ╠═518abd17-1fd8-4620-9afd-a61a62510409
 # ╠═aa052e8d-53cb-4156-a7d3-7bd428de3518
 # ╟─dc4c0227-2d27-4ff7-82b5-ed6b65c4a9ea
-# ╠═8a18dd5a-2e6b-4485-b9e4-01c34a7d32c8
 # ╠═2aed92b1-0829-47e3-a560-c58e6aa899e8
+# ╠═8a18dd5a-2e6b-4485-b9e4-01c34a7d32c8
 # ╟─4ae2c8c2-f5a5-4b6d-ab8c-16b25a4ecf4e
 # ╟─c2437329-a343-4909-af0a-55820fcce5b3
 # ╟─00000000-0000-0000-0000-000000000001
