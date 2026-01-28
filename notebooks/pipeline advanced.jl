@@ -43,65 +43,6 @@ Defining the geometry in terms of an explicit parametric surface equation is by 
 Here's a simple example that does work nicely "out of the box":
 """
 
-# ╔═╡ c1ae7feb-35f5-4ef3-a452-b90f23305cae
-md"However, it's much more typical to require some processing first. For example here's a ship hull file:"
-
-# ╔═╡ 5bc6c6db-2449-4cc6-b8ba-756668b56c18
-begin
-	# download from github and load using FileIO and NURBS
-	boat_url = "https://raw.githubusercontent.com/weymouth/NeumannKelvin.jl/refs/heads/main/examples/optiwise_test_step.step"
-	boat_patches = boat_url |> download |> load
-	# measure each patch as a single panel
-	patch_panels = map(patch->measure(patch,0.5,0.5,1,1),boat_patches) |> Table
-	patch_panels.dA # check areas
-end
-
-# ╔═╡ c4a881eb-2cca-4702-a1a3-45d19da3fd79
-md"""
-> The warnings are from NURBS.jl, letting us know that the input vector is being normalized to run from 0,1 for buth u,v for all 8 patches. That's no problem.
-
-The areas of each patch are suspicious. There are 8, but 2 are tiny and 2 more are repeats of other patches. Let's look at the 4 unique patches...
-"""
-
-# ╔═╡ 38cbcb9e-6f89-4728-bdc2-7b023fb00025
-map(patch->measure(patch,0.5,0.5,1,1),boat_patches[[1,2,4,7]]) |> Table |> viz
-
-# ╔═╡ e96e4098-d846-4256-8661-fd195b102d00
-md"""
-Since we only used one panel per patch, the shape isn't well represented yet, but if you move the view around you can see patch 7 is a bildge keel. We'll skip that surface as well.
-
-You can also see the ship model is around 300m long and has around a 30m draft. The keel is sitting on z=0, but we want to shift this down to place the waterline at z=0 so we can create a double-body prediction.
-"""
-
-# ╔═╡ d41452bf-266e-42eb-b3fe-0002427315e1
-let
-	# make z=0 the max
-	top = maximum(p->maximum(components(p.verts,3)),patch_panels)
-	patches = NURBS.translate(boat_patches[[1,2,4]],SA[0,0,-top])
-	# try panelizing!
-	viz(panelize(patches;hᵤ=10,hᵥ=5),vscale=30)
-end
-
-# ╔═╡ 67b6c1d7-48c2-4a52-ae00-33babcf27079
-md"""
-That's not terrible! It's clearly a ship sitting near z=0. But its not great either. 
-
-1. The panel sizes on the stern are enourmous. We'll have to transpose that patch and try again. Probably the bow as well. 
-1. We can see the geometry has a trim angle and almost certainly we've got it too low in the water! Ideally, we would remesh at the correct waterline, but for now we'll just undo the trim.
-"""
-
-# ╔═╡ 7b8f8584-7a35-4a9c-9642-4ad3598ef76f
-let
-	patches = boat_patches[[1,2,4]]
-	tvec = [false,true,true] # transpose the second two patches
-	trns(p) = (v,u)->p(u,v)
-	water_line = mapreduce(vcat,1:3) do i
-		f = tvec[i] ? trns(patches[i]) : patches[i]
-		d = f([0.,1],[1.])
-		tvec[i] ? d' : d
-	end
-end
-
 # ╔═╡ 6e18b85e-220e-4466-8246-746bebed1866
 md"""
 2. STL Mesh: [Stereolithography format](https://en.wikipedia.org/wiki/STL_(file_format)) described shapes as a raw, unstructured triangulated surface.
@@ -125,6 +66,87 @@ md"Note the panel type is now `TriKernel`. Since these panels are always flat, I
 
 # ╔═╡ 370d3120-5e56-4925-9e75-53c2e47d4f97
 viz(dolphin_sys,vscale=20) # 3. Measure
+
+# ╔═╡ c1ae7feb-35f5-4ef3-a452-b90f23305cae
+md"
+## Input processing example:
+
+These were very clean input files, but it's much more typical for a file to require some processing. This _can_ be done in a notebook for reasonably good NURBS geometries.
+
+For example, below I import a ship hull file and check each patches area."
+
+# ╔═╡ 5bc6c6db-2449-4cc6-b8ba-756668b56c18
+begin
+	# download from github and load using FileIO and NURBS
+	boat_url = "https://raw.githubusercontent.com/weymouth/NeumannKelvin.jl/refs/heads/main/examples/optiwise_test_step.step"
+	boat_patches = boat_url |> download |> load
+	# measure each patch as a single panel
+	map(patch->measure(patch,0.5,0.5,1,1,cubature=true).dA,boat_patches) # check areas
+end
+
+# ╔═╡ c4a881eb-2cca-4702-a1a3-45d19da3fd79
+md"""
+> The warnings are from NURBS.jl, letting us know that the input vector is being normalized to run from 0,1 for buth u,v for all 8 patches. That's no problem.
+
+The areas of each patch are suspicious. There are 8, but 2 are tiny and 2 are repeated values of other patches. Let's look at the 4 unique patches...
+"""
+
+# ╔═╡ 38cbcb9e-6f89-4728-bdc2-7b023fb00025
+map(patch->measure(patch,0.5,0.5,1,1),boat_patches[[1,2,4,7]]) |> Table |> viz
+
+# ╔═╡ e96e4098-d846-4256-8661-fd195b102d00
+md"""
+Since we only used one panel per patch, the shape isn't well represented yet, but if you move the view around you can see patch 7 is a bildge keel. We'll skip that surface as well.
+
+You can also see the ship model is around 300m long with around a 30m draft. The keel is sitting on z=0, but we want to shift this down to place the waterline at z=0 so we can create a double-body prediction.
+"""
+
+# ╔═╡ d41452bf-266e-42eb-b3fe-0002427315e1
+let
+	# make z=0 the max
+	patches = NURBS.translate(boat_patches[[1,2,4]],SA[0,0,-30])
+	# try panelizing!
+	viz(panelize(patches;hᵤ=10,hᵥ=5),vscale=30)
+end
+
+# ╔═╡ 67b6c1d7-48c2-4a52-ae00-33babcf27079
+md"""
+That's not terrible! It's clearly a ship sitting near z=0. But its not great either. 
+
+1. The panel sizes on the stern are enourmous. We'll have to transpose that patch and try again. Probably the bow as well. 
+1. We can see the geometry has a trim angle and almost certainly we've got it too low in the water! Ideally, we would remesh at the correct waterline, but for now we'll just undo the trim.
+1. Missing the transome. Unfortunately NURBS.jl doesn't know how to load that type of surface. We could try to add in a set of panels by hand, but we'll skip it here.
+"""
+
+# ╔═╡ 7b8f8584-7a35-4a9c-9642-4ad3598ef76f
+begin
+	# translate and rotate
+	patches = NURBS.translate(boat_patches[[1,2,4]],SA[0,0,-30])
+	NURBS.rotate!(patches,SA[0,1,0],4/300)	
+	
+	# transpose the bow and stern patches
+	tvec = [false,true,true] 
+	h=(6,3) # set max panel size
+
+	# map through the patches, transposing, panelizing, and concantenating
+	panels = mapreduce(vcat,eachindex(patches)) do i
+	    (hᵤ,hᵥ) = tvec[i] ? reverse(h) : h
+	    panelize(patches[i];hᵤ,hᵥ,transpose=tvec[i],cubature=true)
+	end
+	viz(panels,vscale=30)
+end
+
+# ╔═╡ 20a6c891-6087-4859-9271-377877470e94
+md"""I think those look good enough! Let's get the double-body flow."""
+
+# ╔═╡ d6826dd7-b2b2-44ab-8032-59dc85d4f57e
+sys = BodyPanelSystem(panels,sym_axes=(2,3)) |> directsolve!
+
+# ╔═╡ ec4eaac1-0039-481c-8c03-2101d3a03a48
+viz(sys,vscale=60)
+
+# ╔═╡ 58504db9-6f41-4e7b-bd5f-a80e981ea5ae
+md"""Looking pretty good!"""
 
 # ╔═╡ c2437329-a343-4909-af0a-55820fcce5b3
 begin
@@ -2204,6 +2226,11 @@ version = "4.1.0+0"
 # ╠═2031a395-433a-402c-bf48-e383293efad0
 # ╟─84fa0a7a-81c1-4199-8d58-6ee5026c7527
 # ╠═9ef3d909-2169-4136-be87-246e72f43ee2
+# ╟─6e18b85e-220e-4466-8246-746bebed1866
+# ╠═7660e9fe-6df0-4e26-aa24-2d3b3481bb09
+# ╠═2b04c118-fadb-4987-8f71-305e6e5ef5f0
+# ╟─b3cd27dd-eef1-41f4-b753-779f727388f3
+# ╠═370d3120-5e56-4925-9e75-53c2e47d4f97
 # ╟─c1ae7feb-35f5-4ef3-a452-b90f23305cae
 # ╠═5bc6c6db-2449-4cc6-b8ba-756668b56c18
 # ╟─c4a881eb-2cca-4702-a1a3-45d19da3fd79
@@ -2212,11 +2239,10 @@ version = "4.1.0+0"
 # ╠═d41452bf-266e-42eb-b3fe-0002427315e1
 # ╟─67b6c1d7-48c2-4a52-ae00-33babcf27079
 # ╠═7b8f8584-7a35-4a9c-9642-4ad3598ef76f
-# ╟─6e18b85e-220e-4466-8246-746bebed1866
-# ╠═7660e9fe-6df0-4e26-aa24-2d3b3481bb09
-# ╠═2b04c118-fadb-4987-8f71-305e6e5ef5f0
-# ╟─b3cd27dd-eef1-41f4-b753-779f727388f3
-# ╠═370d3120-5e56-4925-9e75-53c2e47d4f97
+# ╟─20a6c891-6087-4859-9271-377877470e94
+# ╠═d6826dd7-b2b2-44ab-8032-59dc85d4f57e
+# ╠═ec4eaac1-0039-481c-8c03-2101d3a03a48
+# ╟─58504db9-6f41-4e7b-bd5f-a80e981ea5ae
 # ╟─c2437329-a343-4909-af0a-55820fcce5b3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
