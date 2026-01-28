@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.13
+# v0.20.21
 
 using Markdown
 using InteractiveUtils
@@ -17,23 +17,23 @@ using NeumannKelvin:BodyPanelSystem,directsolve!
 using NeumannKelvin:addedmass
 
 # ╔═╡ 9ef3d909-2169-4136-be87-246e72f43ee2
-begin 
+begin
+	#1. Set-up
 	using NURBS, FileIO , PlutoUI
-
 	torus_url = "https://raw.githubusercontent.com/HoBeZwe/NURBS.jl/refs/heads/main/test/assets/torus.stp"
 	torus_patches = torus_url |> download |> load
 	torus_panels = panelize(torus_patches,hᵤ=1/2)
+
+	# 2. Solve
 	torus_sys = BodyPanelSystem(torus_panels,U=SA[0,0,1]) |> directsolve!
+
+	# 3. Measure
 	viz(torus_sys,vscale=3)
-	# queen_mary_url  = "https://raw.githubusercontent.com/weymouth/NumericalShipHydro/refs/heads/main/hull_geometries/HMS_QueenMary_bare_hull.stp"
-	# queen_mary_patches = load(download(queen_mary_url))[[1,4,13,15]]
-	# queen_mary_panels = panelize(queen_mary_patches,hᵤ=20)
 end
 
 # ╔═╡ 7660e9fe-6df0-4e26-aa24-2d3b3481bb09
-begin 
+begin # 1. Set-up
 	using GeometryBasics, MeshIO
-
 	dolphin_url = "https://raw.githubusercontent.com/weymouth/NeumannKelvin.jl/refs/heads/main/examples/LowPolyDolphin.stl"
 	dolphin_panels = dolphin_url |> download |> load |> panelize
 	viz(dolphin_panels,vscale=10)
@@ -42,7 +42,7 @@ end
 # ╔═╡ fa570bdd-3772-4750-980d-d75cf268ffcf
 md"""
 
-# General geometries and panel systems
+# General simulation prediction pipeline
 
 In the last notebook, we wrote a panel method in only 4 lines of code. But we saw that this is only one step in the **simulation prediction pipeline**:
 
@@ -50,22 +50,19 @@ In the last notebook, we wrote a panel method in only 4 lines of code. But we sa
 2. **Solve** the linear system for the panel strengths `q` (_easy_)
 3. **Measure** the system to generate whatever results you are interested in (_harder_?)
 
-**Step 2** might be a little time consuming, but it is by far the easiest from a user point of view. Each system is treated basically identically and the computer is doing all the work!
+**Step 2** is by far the easiest from a user point of view. Each system is treated identically and the computer is doing all the work!
 
-**Step 3** is harder, mostly because there are many potential things we might want to measure and each may have different options. But once you have carefully set-up and validated a postprocessing function, you can use it forever! 
+**Step 3** is harder, mostly because there are many potential things we might want to measure. But once you have carefully developed and validated a measurement function, you can use it forever!
 
 **Step 1** is typically the hardest because every problem is different. Trying to improve our panelization was tricky even for the simple sphere example, and dealing with more general problems like ship hulls and free surfaces is exponentially more complex.
 
-In this notebook we will use some functions in the Neumann-Kelvin package to *simplify the simulation predicition pipeline* (at least simplify it a little). The goal of this notebook is to help you move through the pipeline quickly while avoiding the most critical error of all:
+We will use functions in the Neumann-Kelvin package to *simplify the simulation prediction pipeline*, particularly the set-up. But we need to be careful to avoid the most critical error of all:
 
 |Type 5A: Black box user error!|
-|:---:| 
-|The worst and most common type of human error occurs when people use prediction tools as a black box, without understanding them. 
+|:---:|
+|The worst and most common type of human error occurs when people use prediction tools as a black box, without understanding them. As an engineer you are responsible for the correctness of your results - fight that temptation!
 
-The temptation to using tools as a black box is almost as extreme as the magnitudes of error that it can produce. As an engineer - you are responsible for the results you produce and need to fight against this temptation before it costs you.
-
-
-## Simplifying step 1: Automated panelization and visualization
+## 1. Set-up: Automated panelization and visualization
 
 The code below uses two new functions to help with step 1: `panelize` and `viz`.
 """
@@ -77,7 +74,7 @@ function sphere(h;R=1,kwargs...)
 end
 
 # ╔═╡ eae81e8a-2173-4898-a36c-c6b559c814ee
-let # this defines a little local environment to play in 
+let # this defines a little local environment to play in
 	h = 1/4
 	panels = sphere(h; devlimit=0.05, flip=false, transpose=false) # what are these?
 	viz(panels,colorrange=(0,1.1h^2),label="dA",vscale=3) # what's this?
@@ -88,18 +85,16 @@ md"""
 
 ### Activity
  - Read the documentation for `panelize` and `viz` with a few other students. Each group needs to ask me a question after doing the following parts...
- - Change the `devlimit` parameter and pay attension to changes in the panelization. Can you explain what's going on?
+ - Change the `devlimit` parameter and pay attention to changes in the panelization. Can you explain what's going on?
  - Change the `flip` and `transpose` flags. This will break the notebook(!), but can you imagine when you might need these options?
 
 ---
 
-Once you know how to use them and you are aware of their limitations, these two functions make it fairly easy to create a set of panels and visually check their correctness. 
+Once you know how to use them and you are aware of their limitations, these two functions make it fairly easy to create a set of panels and visually check their correctness. So now you can try it yourself!
 
-In fact it's so easy that it is already your turn!!
+### Activity
 
-### Activity 
-
-The function `sphere` samples the [parametric surface equation](https://en.wikipedia.org/wiki/Parametric_surface) for a sphere to generate the panels. 
+The function `sphere` samples the [parametric surface equation](https://en.wikipedia.org/wiki/Parametric_surface) for a sphere to generate the panels.
 
 - Look up **a different** parametric surface online and implement a function to generate panels on that surface. (If you want a second example, there is one below.)
  - Plot the surface and check if the areas are fairly uniform. _Should_ they be for your shape?
@@ -109,14 +104,14 @@ There is another example below you can look at as well but don't delete it, we'l
 
 # ╔═╡ 64b3c8b6-0eda-41e3-ac91-3a9c9f51006f
 # new_shape(h,shape_parameters; kwargs...)
-# 	S(u,v) = # parametric equation 
+# 	S(u,v) = # parametric equation
 # 	panelize(S,u_start,u_end,v_start,v_end,hᵤ=h;kwargs...)
 # end
 
 # ╔═╡ d21f51a6-86c3-4532-a84a-c72f6d92505c
 # let # sandbox
 # 	panels = # new_shape
-# 	viz(panels) # add whatever you want 
+# 	viz(panels) # add whatever you want
 # end
 
 # ╔═╡ ddf1cde1-99eb-4d37-ab82-1bbfd20d4540
@@ -124,29 +119,29 @@ md"""
 
 ## Example: Wigley hull
 
-Finally - we get to a ship (like) shape in the numerical ship hydrodynamics class! The Wigley hull is a classic example used in [numerical and experimental studies](https://scholar.google.co.uk/scholar?hl=en&as_sdt=0%2C5&q=wigley+hull&btnG=) because it's parametric equation is dead-simple: the scaled width $y=\frac 12 B\eta$ is just a parabola
+Finally - we get to a ship-like shape in the numerical ship hydrodynamics class! The Wigley hull is a classic example used in [numerical and experimental studies](https://scholar.google.co.uk/scholar?hl=en&as_sdt=0%2C5&q=wigley+hull&btnG=) because its parametric equation is a simple parabola
 
 $\eta(\xi,\zeta) = (1-\xi^2)(1-\zeta^2)$
 
-Where $x=\frac 12 L\xi,z=D\zeta$ and $L,B,D$ are the hull length, beam, and depth.
+with $x=\frac 12 L\xi,\ y= \frac 12 B\eta,\ z=D\zeta$ and $L,B,D$ are the length, beam, and depth.
 
 I've implemented this in the code below:
 """
 
 # ╔═╡ 261636cc-dd20-46b5-bbf0-3de9db04f0aa
 begin
-	function wigley_demihull(hᵤ;B=1/8,D=1/16,hᵥ=0.5hᵤ,kwargs...)
+	function wigley_demihull(hᵤ;B,D,hᵥ=0.5hᵤ,kwargs...)
 	    S(u,v) = SA[u-0.5,-2B*u*(1-u)*(v)*(2-v),D*(v-1)]
 		panelize(S;hᵤ,hᵥ,kwargs...)
 	end
-	h = 1/40; B = 1/8
-	demihull = wigley_demihull(h;B)
+	h = 1/40; B = 1/8; D = 1/16
+	demihull = wigley_demihull(h;B,D)
 	viz(demihull,vscale=0.25,colorrange=(0,h^2))
 end
 
 # ╔═╡ 7f614f43-4094-495d-9c4b-bcff1cbc90a7
 md"""
-Do you see any issues with this geometry? Like say... **our ship only has [one side!](https://www.youtube.com/watch?v=3m5qxZm_JqM)**
+Do you see any issues with this geometry? For example, **our ship only has [one side!](https://www.youtube.com/watch?v=3m5qxZm_JqM)**
 
 ### Explicit reflection
 
@@ -155,12 +150,12 @@ The most obvious fix is to create a second set of panels covering the other side
 
 # ╔═╡ 6a0f0ecf-6926-4527-accf-c5519854879c
 begin
-	function wigley_hull(h;B=1/8,kwargs...)
+	function wigley_hull(h;B,kwargs...)
 		starboard = wigley_demihull(h;B,kwargs...)   # original
 		portside = wigley_demihull(h;B=-B,kwargs...) # reflected ??
 		return [starboard; portside]   # concatenate them together
 	end
-	viz(wigley_hull(h),vscale=0.25)
+	viz(wigley_hull(h;B,D),vscale=0.25)
 end
 
 # ╔═╡ b9d28dea-9f7d-4826-8f61-4e5e82227eee
@@ -172,15 +167,15 @@ Instead of doubling (or quadrupling) the number of panels, we should use the **m
 
 $\phi = \int G(x,p) + \int G(x,m(p)) = \int G(x,p) + \int G(m(x),p)$
 
-where $m$ is a mirror function and we can *either* mirror the panel or mirror the query point - they give the same result since $\int G$ is symmetric. Since mirroring a point across the y-axis is easy, we'll do that: `m(x)= x .* [1,-1,1]`!
+where $m$ is a mirror function and we can *either* mirror the panel or mirror the query point - they give the same result since $\int G$ is symmetric. We'll use the second option since `m(x)= x .* [1,-1,1]` is all we need to mirror a point across the y-axis.
 
-Why is this so much better that *explicitly* reflecting the panels? It's **twice** as efficient! Solving for half as many unknowns is twice as fast, as is measure the results. This is a nice segway into step 2, solving the system. 
+Why is this so much better than *explicitly* reflecting the panels? It's **twice** as efficient! Solving for half as many unknowns is twice as fast, as is measuring the results. This is a nice segue into step 2, solving the system.
 
-## Simplifying step 2: BodyPanelSystem + directsolve!
+## 2. Solve: bundling panels and metadata
 
-Solving was easy, in fact the only tricky bit was remembering using the background flow `U` to set up the right-hand side. Similarly, we now need to be careful to account for any symmetry axis when forming the influence matrix. 
+Solving was easy, in fact the only tricky bit was remembering to use the same background flow `U` to make the right-hand side vector and to measure the velocity. Similarly, we now need to be careful to consistently use the symmetry information when forming the influence matrix and measuring.
 
-This is known as **meta-data**, and we want to bundle that together with our panels before solving and measuring. I've created a very simple "struct" to do this called `BodyPanelSystem`. 
+This is known as **metadata**, and I've created a very simple "struct" called `BodyPanelSystem` to bundle the metadata together with our panels and source strength `q`.
 
 Let's try this on the sphere first.
 """
@@ -191,9 +186,9 @@ BodyPanelSystem(sphere(1/4); U=SA[0,0,1], sym_axes=())
 # ╔═╡ 2ed32a1d-2413-45d2-85ec-a534ca3de82b
 md"""
 This new `BodyPanelSystem` object has a nice summary of what's inside it:
- - How many panels define the body and the surface area and volume of that body. 
- - The background flow `U`. 
- - All the `mirrors`. Notice even in this case without symmetry axis, it's lists the "trivial" mirror [1,1,1]. 
+ - How many panels define the body and the surface area and volume of that body.
+ - The background flow `U`.
+ - All the `mirrors`. Notice even in this case without a symmetry axis, it lists the "null" mirror [1,1,1] which leaves the point unchanged.
  - Finally, it tells you that this panel system has strength `q=0`. That's because we haven't solved it yet!
 
 Let's fix that last point using the function `directsolve!`:
@@ -206,15 +201,15 @@ sphere_sys = BodyPanelSystem(sphere(1/4)) |> directsolve!
 md"""
 ### Activity
 
-- That function threw a warning. Read the docs to make sure it is ok.
+- That function threw a warning. Read the docs to make sure everything it okay.
 - Is it just me... or was that *very* fast? Can you see why in the docs?
 - Did the solution update? Do the extreme values make sense for a sphere flow?
 
-And with that, we're done! (I told you step 2 was easy!) Onto the last step of the pipeline...
+And with that, we're done! (I told you step 2 was easy!) On to the last step of the pipeline...
 
-## Simplifying step 3: measure PanelSystems
+## 3. Measure: PanelSystem measurement functions
 
-Wrapping our panels and meta-information together already simplifies measuring the solution. I have written a suite of very simple measurement functions already, and you can do the same for any new quantity you want. For example, the added mass:
+Wrapping our panels and metadata together already simplifies measuring the solution. I have written a suite of very simple measurement functions already, and you can do the same for any new quantity you want. For example, the added mass:
 """
 
 # ╔═╡ e2eb796e-0962-4f37-a8ea-a1334c0600cb
@@ -222,7 +217,7 @@ addedmass(sphere_sys)
 
 # ╔═╡ e08a089d-9663-40b4-8dee-899449205bbc
 md"""
-The docs explain that this is the first row of the added mass vector (which is enough for us since the sphere is symmetric), and that the output has alread been scaled by the displaced mass `ρV`. The prediction is within 1% of the anayltic solution [1/2,0,0]!
+The docs explain that this is the first row of the added mass vector (the surge response), and that the output has already been scaled by the displaced mass `ρV`. The prediction is within 1% of the analytic solution [1/2,0,0]!
 
 But let's actually _look_ at the solution!
 """
@@ -232,91 +227,98 @@ viz(sphere_sys,vscale=2)
 
 # ╔═╡ 5c360b4a-b078-4649-a161-ea34df151310
 md"""
-The default visualization for a `BodyPanelSystem` shows the `cₚ` and the induced velocity `u` on each face. 
+The default visualization for a `BodyPanelSystem` shows the `cₚ` and the induced velocity `u` on each face.
 
 ### Activity
  - Do the cₚ values match the analytic solution for a sphere?
  - Check the docs for `u` and measure `u` at the point x=SA[0,1,0] on the equator of the sphere. Is the Neumann BC being enforced properly? Is the magnitude of velocity correct?
- - Create solve and visualize a BodyPanelSystem for your `new_shape`. Any surprises?
+ - Create, solve, and visualize a BodyPanelSystem for your `new_shape`. Any surprises?
 
 
 ### Double-body flow
 
-Let's return back to the Wigley hull example. The ship has been positioned below the freesurface at $z=0$, but we won't have the tools to solve the free surface solution until next week...
+Let's return back to the Wigley hull example. The ship has been positioned below the free surface at $z=0$, but we won't solve the free surface problem until next week. Instead, we will consider the **double-body flow** which is the flow around the ship and its reflection across the free surface plane.
 
-A very common first step in the analysis of a ship hull is to predict the "double body" flow, i.e. the flow resulting from reflecting the body across $z=0$ without a free surface. 
-> We will see next week that this is equivalent to the low speed limit of the free surface flow. 
+> We will see next week that this is equivalent to the low speed limit of the free surface flow.
 
 I've coded up the double hull geometry, but we don't really want to use it...
 """
 
 # ╔═╡ 6e657f83-fe06-4311-aaf5-0c88fb13dc8e
 begin
-	function wigley_doublehull(h;D=1/8,kwargs...)
+	function wigley_doublehull(h;D,kwargs...)
 		below = wigley_hull(h;D,kwargs...)    # original
-		above = wigley_hull(h;D=-B,kwargs...) # reflected
+		above = wigley_hull(h;D=-D,kwargs...) # reflected
 		return [below; above]   # concatenate them together
 	end
-	viz(wigley_doublehull(h),vscale=0.25)
+	viz(wigley_doublehull(h;B,D),vscale=0.25)
 end
 
 # ╔═╡ 84fa0a7a-81c1-4199-8d58-6ee5026c7527
 md"""
 
 ### Activity
- 1. Create and solve the explicity double body system. (If you didn't fix the problem with `wigley_hull` already, you'll need to do it now!)
- 1. Use the method of images to get the double body solution using only the `demihull` panels. How many mirrors are there?
- 1. Compare the extrema of `q` and the inline `addedmass` vector. Do they match? Should they?
+ 1. Create and solve the explicitly double-body system. (If you didn't fix the problem with `wigley_hull` already, you'll need to do it now!)
+ 1. Use the method of images to get the double-body solution using only the `demihull` panels. How many mirrors are there?
+ 1. Compare the extrema of `q` and the inline `addedmass` vector between the explicit and virtual double-body panel systems. Do they match? Should they?
  1. Compare the solve time required for the two methods. Did you get the speed-up you expected using the method of images?
- 1. **Bonus:** How many demihulls would you need to create a Wigley **catamaran** and solve for the double body flow? 
+ 1. **Bonus:** How many demihulls would you need to create a Wigley **catamaran** and solve for the double-body flow?
 
-## Step 1 (again): Importing geometry files
+## Full pipe-line examples: Imported geometry files
 
 Defining the geometry in terms of an explicit parametric surface equation is by far the fastest and easiest approach. However, most engineering programs define surfaces in other ways.
- 
-1. NURBS: [Non-Uniform Rational B-Splines](https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline) are a classic method to design smooth objects like ship hulls, and are the bases of most CAD tools such as Rhino. In fact, NURBS are parametric surfaces themselves, so the methods we've define above will work in principle as soon as we load the file using `FileIO.jl` and `NURBS.jl`. 
 
-In practise, the geometry is always defined in terms of a large number of patches, you need to watch out for patch orrientation, and you need to watch out for using panel sizes 100x of times bigger or smaller than your patch! Here's a simple example: 
+1. NURBS: [Non-Uniform Rational B-Splines](https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline) are a classic method to design smooth objects like ship hulls, and form the basis of most CAD tools such as Rhino. In fact, NURBS are parametric surfaces themselves, so the methods above will work *in principle* as soon as we load the file using `FileIO.jl` and `NURBS.jl`.
+
+*In practice* however, things are more complicated. The geometry is always defined in terms of a large number of patches, many of which you won't actually want in the simulation, and many of the ones you want will have flipped normals or defined in ways that the NURBS.jl package can't read. You'll also likely need to scale, translate and rotate all the patches into position, etc, etc.
+
+Here's a simple example that does work nicely "out of the box":
+
+> These examples can be slow to run the first time and require an internet connection to download the geometries so I've disabled them by default. Click the ... button on the top right corner of the cells below and enable these examples.
+
 """
 
 # ╔═╡ 6e18b85e-220e-4466-8246-746bebed1866
 md"""
-2. STL Mesh: [Stereolithography format](https://en.wikipedia.org/wiki/STL_(file_format)) described shapes as a raw, unstructured triangulated surface. This is extremely simple and general, but often requires a **lot** of triangles.
+2. STL Mesh: [Stereolithography format](https://en.wikipedia.org/wiki/STL_(file_format)) described shapes as a raw, unstructured triangulated surface.
 
-Luckily computer scientists use STLs for most graphics applications and have developed excellent tools to speed up dealing with such meshs. We'll discuss the details in the next notebook.
+This is extremely simple and general, but often requires a **lot** of triangles.
+Luckily computer scientists use STLs for most graphics applications and have developed excellent tools to speed up dealing with such meshes. We'll discuss the details in the next notebook.
 
-Here's a nice little example using a geometry I found online!
+A more fundamental problem is that a bad STL mesh is extremely difficult to work with. Finding the 101 triangles with flipped normals, the 21 that are overlapping, and the 73 with zero-area in a 20k triangle mesh is not fun. It is also difficult to "remesh" an STL making convergence studies much more work.
+
+But when they are well-made, STL meshes work fine. Here's a nice "little" example with 1456 triangles that I found online!
 """
 
-# ╔═╡ b3cd27dd-eef1-41f4-b753-779f727388f3
-md"Note the panel type is now `TriKernel`, indicating that the exact Green's function is used to calculate the influence of each panel. Let's take a look!"
-
 # ╔═╡ 2b04c118-fadb-4987-8f71-305e6e5ef5f0
-dolphin_sys = BodyPanelSystem(dolphin_panels,U=SA[0,1,0],wrap=PanelTree) |> gmressolve!
+begin # 2. Solve
+	dolphin_sys = BodyPanelSystem(dolphin_panels,U=SA[0,1,0],wrap=PanelTree)
+	gmressolve!(dolphin_sys,verbose=false)
+end
+
+# ╔═╡ b3cd27dd-eef1-41f4-b753-779f727388f3
+md"Note the panel type is now `TriKernel`. Since these panels are always flat, I've chosen to use the exact Green's function from Hess to calculate the influence of each panel. Let's take a look!"
 
 # ╔═╡ 370d3120-5e56-4925-9e75-53c2e47d4f97
-viz(dolphin_sys,vscale=20)
+viz(dolphin_sys,vscale=20) # 3. Measure
 
 # ╔═╡ 7a9c397d-5f62-44fc-836a-2195e4348852
 md"""
 
 ## Summary
 
-In this notebook we unlocked the full potential (get it!?!) of the Neumann-Kelvin package for the simulation prediction pipeline.
+In this notebook we unlocked the full potential (get it?) of the Neumann-Kelvin package for the simulation prediction pipeline.
 
-Step 1: simplified panel creation
-- Automatic methods to panelize a surface defined by a parametric surface
-- Loading and panelizing geometries defined in NURBS and STL files
-- Concatenating patches of panels together to form more complex geometries
+1. **Set-up**: simplified panel creation
+- Automatic methods to panelize a surface defined by a parametric surface or a triangle mesh
+- Concatenating patches of panels together to form more complex geometries (like catamarans and NURBS meshes)
 
-Step 2: efficient system description and solve
+2. **Solve**: efficient system description and solve
 - Wrap panels and meta-data to avoid mistakes and helper code
-- Method of images to minimize the number of required panels
-- Set-up and solve Neumann-BCs with multi-threaded acceleration
+- Method of images and multi-threading to speed up the solution
 
-Step 3: unified measurements
-- Vizualize and measure panel geometry to catch bad inputs(!)
-- Vizualize and measure known solutions to validate approach(!)
+3. **Measure**: validated functions
+- Visualize and measure on known solutions to validate approach(!)
 - Visualize and measure on new problems with confidence
 
 """
@@ -352,7 +354,7 @@ WGLMakie = "~0.13.8"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.2"
+julia_version = "1.11.5"
 manifest_format = "2.0"
 project_hash = "6b1905a75e4665be8984089a3d2e65f52779ce43"
 
@@ -1618,7 +1620,7 @@ version = "3.4.4+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+2"
+version = "0.8.5+0"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "NetworkOptions", "OpenSSL_jll", "Sockets"]
@@ -2424,8 +2426,8 @@ version = "4.1.0+0"
 # ╠═9ef3d909-2169-4136-be87-246e72f43ee2
 # ╟─6e18b85e-220e-4466-8246-746bebed1866
 # ╠═7660e9fe-6df0-4e26-aa24-2d3b3481bb09
-# ╟─b3cd27dd-eef1-41f4-b753-779f727388f3
 # ╠═2b04c118-fadb-4987-8f71-305e6e5ef5f0
+# ╟─b3cd27dd-eef1-41f4-b753-779f727388f3
 # ╠═370d3120-5e56-4925-9e75-53c2e47d4f97
 # ╟─7a9c397d-5f62-44fc-836a-2195e4348852
 # ╟─c2437329-a343-4909-af0a-55820fcce5b3
