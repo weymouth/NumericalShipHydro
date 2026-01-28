@@ -7,265 +7,124 @@ using InteractiveUtils
 # ╔═╡ 2031a395-433a-402c-bf48-e383293efad0
 using NeumannKelvin, WGLMakie # fancy 3D interactive plots!!
 
-# ╔═╡ 2ca442e5-d760-44d3-a7b7-0727ed144203
-using NeumannKelvin:panelize,viz # what are these?!?
-
-# ╔═╡ bed61b8b-f3fd-4b28-b62a-f6f193029da8
-using NeumannKelvin:BodyPanelSystem,directsolve!
-
-# ╔═╡ 53f74353-6e85-4632-ab21-36224e2f6601
-using NeumannKelvin:addedmass
-
-# ╔═╡ fa570bdd-3772-4750-980d-d75cf268ffcf
-md"""
-
-# General simulation prediction pipeline
-
-In the last notebook, we wrote a panel method in only 4 lines of code. But we saw that this is only one step in the **simulation prediction pipeline**:
-
-1. **Set-up** the panel geometry and other inputs for the solver (_hardest_?)
-2. **Solve** the linear system for the panel strengths `q` (_easy_)
-3. **Measure** the system to generate whatever results you are interested in (_harder_?)
-
-**Step 2** is by far the easiest from a user point of view. Each system is treated identically and the computer is doing all the work!
-
-**Step 3** is harder, mostly because there are many potential things we might want to measure. But once you have carefully developed and validated a measurement function, you can use it forever!
-
-**Step 1** is typically the hardest because every problem is different. Trying to improve our panelization was tricky even for the simple sphere example, and dealing with more general problems like ship hulls and free surfaces is exponentially more complex.
-
-We will use functions in the Neumann-Kelvin package to *simplify the simulation prediction pipeline*, particularly the set-up. But we need to be careful to avoid the most critical error of all:
-
-|Type 5A: Black box user error!|
-|:---:|
-|The worst and most common type of human error occurs when people use prediction tools as a black box, without understanding them. As an engineer you are responsible for the correctness of your results - fight that temptation!
-
-## 1. Set-up: Automated panelization and visualization
-
-The code below uses two new functions to help with step 1: `panelize` and `viz`.
-"""
-
-# ╔═╡ dfa6d033-9253-47d3-85ad-9f13b4c4d5d3
-function sphere(h;R=1,kwargs...)
-    S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)]
-	panelize(S,0,π,0,2π,hᵤ=h;kwargs...) # what's this?
-end
-
-# ╔═╡ eae81e8a-2173-4898-a36c-c6b559c814ee
-let # this defines a little local environment to play in
-	h = 1/4
-	panels = sphere(h; devlimit=0.05, flip=false, transpose=false) # what are these?
-	viz(panels,colorrange=(0,1.1h^2),label="dA",vscale=3) # what's this?
-end
-
-# ╔═╡ 62fec8d1-e0ca-447e-ad55-a7a53d0a6528
-md"""
-
-### Activity
- - Read the documentation for `panelize` and `viz` with a few other students. Each group needs to ask me a question after doing the following parts...
- - Change the `devlimit` parameter and pay attention to changes in the panelization. Can you explain what's going on?
- - Change the `flip` and `transpose` flags. This will break the notebook(!), but can you imagine when you might need these options?
-
----
-
-Once you know how to use them and you are aware of their limitations, these two functions make it fairly easy to create a set of panels and visually check their correctness. So now you can try it yourself!
-
-### Activity
-
-The function `sphere` samples the [parametric surface equation](https://en.wikipedia.org/wiki/Parametric_surface) for a sphere to generate the panels.
-
-- Look up **a different** parametric surface online and implement a function to generate panels on that surface. (If you want a second example, there is one below.)
- - Plot the surface and check if the areas are fairly uniform. _Should_ they be for your shape?
-
-There is another example below you can look at as well but don't delete it, we'll want it later.
-"""
-
-# ╔═╡ 64b3c8b6-0eda-41e3-ac91-3a9c9f51006f
-# new_shape(h,shape_parameters; kwargs...)
-# 	S(u,v) = # parametric equation
-# 	panelize(S,u_start,u_end,v_start,v_end,hᵤ=h;kwargs...)
-# end
-
-# ╔═╡ d21f51a6-86c3-4532-a84a-c72f6d92505c
-# let # sandbox
-# 	panels = # new_shape
-# 	viz(panels) # add whatever you want
-# end
-
-# ╔═╡ ddf1cde1-99eb-4d37-ab82-1bbfd20d4540
-md"""
-
-## Example: Wigley hull
-
-Finally - we get to a ship-like shape in the numerical ship hydrodynamics class! The Wigley hull is a classic example used in [numerical and experimental studies](https://scholar.google.co.uk/scholar?hl=en&as_sdt=0%2C5&q=wigley+hull&btnG=) because its parametric equation is a simple parabola
-
-$\eta(\xi,\zeta) = (1-\xi^2)(1-\zeta^2)$
-
-with $x=\frac 12 L\xi,\ y= \frac 12 B\eta,\ z=D\zeta$ and $L,B,D$ are the length, beam, and depth.
-
-I've implemented this in the code below:
-"""
-
-# ╔═╡ 261636cc-dd20-46b5-bbf0-3de9db04f0aa
+# ╔═╡ 9ef3d909-2169-4136-be87-246e72f43ee2
 begin
-	function wigley_demihull(hᵤ;B,D,hᵥ=0.5hᵤ,kwargs...)
-	    S(u,v) = SA[u-0.5,-2B*u*(1-u)*(v)*(2-v),D*(v-1)]
-		panelize(S;hᵤ,hᵥ,kwargs...)
-	end
-	h = 1/40; B = 1/8; D = 1/16
-	demihull = wigley_demihull(h;B,D)
-	viz(demihull,vscale=0.25,colorrange=(0,h^2))
+	#1. Set-up
+	using NURBS, FileIO , PlutoUI
+	torus_url = "https://raw.githubusercontent.com/HoBeZwe/NURBS.jl/refs/heads/main/test/assets/torus.stp"
+	torus_patches = torus_url |> download |> load
+	torus_panels = panelize(torus_patches,hᵤ=1/2)
+
+	# 2. Solve
+	torus_sys = BodyPanelSystem(torus_panels,U=SA[0,0,1]) |> directsolve!
+
+	# 3. Measure
+	viz(torus_sys,vscale=3)
 end
 
-# ╔═╡ 7f614f43-4094-495d-9c4b-bcff1cbc90a7
-md"""
-Do you see any issues with this geometry? For example, **our ship only has [one side!](https://www.youtube.com/watch?v=3m5qxZm_JqM)**
-
-### Explicit reflection
-
-The most obvious fix is to create a second set of panels covering the other side and then add them together. Something like the code below, *but I've made a mistake*. **You need to fix my mistake in order for the code below this to run!**
-"""
-
-# ╔═╡ 6a0f0ecf-6926-4527-accf-c5519854879c
-begin
-	function wigley_hull(h;B,kwargs...)
-		starboard = wigley_demihull(h;B,kwargs...)   # original
-		portside = wigley_demihull(h;B=-B,kwargs...) # reflected ??
-		return [starboard; portside]   # concatenate them together
-	end
-	viz(wigley_hull(h;B,D),vscale=0.25)
-end
-
-# ╔═╡ b9d28dea-9f7d-4826-8f61-4e5e82227eee
-md"""
-
-### Virtual reflection: The method of images
-
-Instead of doubling (or quadrupling) the number of panels, we should use the **method of images** which reflects the influence of the panel onto the other side of the axis. For every panel $p$ we say
-
-$\phi = \int G(x,p) + \int G(x,m(p)) = \int G(x,p) + \int G(m(x),p)$
-
-where $m$ is a mirror function and we can *either* mirror the panel or mirror the query point - they give the same result since $\int G$ is symmetric. We'll use the second option since `m(x)= x .* [1,-1,1]` is all we need to mirror a point across the y-axis.
-
-Why is this so much better than *explicitly* reflecting the panels? It's **twice** as efficient! Solving for half as many unknowns is twice as fast, as is measuring the results. This is a nice segue into step 2, solving the system.
-
-## 2. Solve: bundling panels and metadata
-
-Solving was easy, in fact the only tricky bit was remembering to use the same background flow `U` to make the right-hand side vector and to measure the velocity. Similarly, we now need to be careful to consistently use the symmetry information when forming the influence matrix and measuring.
-
-This is known as **metadata**, and I've created a very simple "struct" called `BodyPanelSystem` to bundle the metadata together with our panels and source strength `q`.
-
-Let's try this on the sphere first.
-"""
-
-# ╔═╡ 2d77ccb8-6b9d-4650-bcc1-3b8746b994d3
-BodyPanelSystem(sphere(1/4); U=SA[0,0,1], sym_axes=())
-
-# ╔═╡ 2ed32a1d-2413-45d2-85ec-a534ca3de82b
-md"""
-This new `BodyPanelSystem` object has a nice summary of what's inside it:
- - How many panels define the body and the surface area and volume of that body.
- - The background flow `U`.
- - All the `mirrors`. Notice even in this case without a symmetry axis, it lists the "null" mirror [1,1,1] which leaves the point unchanged.
- - Finally, it tells you that this panel system has strength `q=0`. That's because we haven't solved it yet!
-
-Let's fix that last point using the function `directsolve!`:
-"""
-
-# ╔═╡ cb3588f4-6918-47fd-a8f4-b2771123a779
-sphere_sys = BodyPanelSystem(sphere(1/4)) |> directsolve!
-
-# ╔═╡ 1a94e023-3c32-459a-98a2-bca589f8e6bd
-md"""
-### Activity
-
-- That function threw a warning. Read the docs to make sure everything it okay.
-- Is it just me... or was that *very* fast? Can you see why in the docs?
-- Did the solution update? Do the extreme values make sense for a sphere flow?
-
-And with that, we're done! (I told you step 2 was easy!) On to the last step of the pipeline...
-
-## 3. Measure: PanelSystem measurement functions
-
-Wrapping our panels and metadata together already simplifies measuring the solution. I have written a suite of very simple measurement functions already, and you can do the same for any new quantity you want. For example, the added mass:
-"""
-
-# ╔═╡ e2eb796e-0962-4f37-a8ea-a1334c0600cb
-addedmass(sphere_sys)
-
-# ╔═╡ e08a089d-9663-40b4-8dee-899449205bbc
-md"""
-The docs explain that this is the first row of the added mass vector (the surge response), and that the output has already been scaled by the displaced mass `ρV`. The prediction is within 1% of the analytic solution [1/2,0,0]!
-
-But let's actually _look_ at the solution!
-"""
-
-# ╔═╡ 8d968c67-59bd-48f2-87ff-448e91e5eb62
-viz(sphere_sys,vscale=2)
-
-# ╔═╡ 5c360b4a-b078-4649-a161-ea34df151310
-md"""
-The default visualization for a `BodyPanelSystem` shows the `cₚ` and the induced velocity `u` on each face.
-
-### Activity
- - Do the cₚ values match the analytic solution for a sphere?
- - Check the docs for `u` and measure `u` at the point x=SA[0,1,0] on the equator of the sphere. Is the Neumann BC being enforced properly? Is the magnitude of velocity correct?
- - Create, solve, and visualize a BodyPanelSystem for your `new_shape`. Any surprises?
-
-
-### Double-body flow
-
-Let's return back to the Wigley hull example. The ship has been positioned below the free surface at $z=0$, but we won't solve the free surface problem until next week. Instead, we will consider the **double-body flow** which is the flow around the ship and its reflection across the free surface plane.
-
-> We will see next week that this is equivalent to the low speed limit of the free surface flow.
-
-I've coded up the double hull geometry, but we don't really want to use it...
-"""
-
-# ╔═╡ 6e657f83-fe06-4311-aaf5-0c88fb13dc8e
-begin
-	function wigley_doublehull(h;D,kwargs...)
-		below = wigley_hull(h;D,kwargs...)    # original
-		above = wigley_hull(h;D=-D,kwargs...) # reflected
-		return [below; above]   # concatenate them together
-	end
-	viz(wigley_doublehull(h;B,D),vscale=0.25)
+# ╔═╡ 7660e9fe-6df0-4e26-aa24-2d3b3481bb09
+begin # 1. Set-up
+	using GeometryBasics, MeshIO
+	dolphin_url = "https://raw.githubusercontent.com/weymouth/NeumannKelvin.jl/refs/heads/main/examples/LowPolyDolphin.stl"
+	dolphin_panels = dolphin_url |> download |> load |> panelize
+	viz(dolphin_panels,vscale=10)
 end
 
 # ╔═╡ 84fa0a7a-81c1-4199-8d58-6ee5026c7527
 md"""
+## Advanced pipe-line examples: Imported geometry files
 
-### Activity
- 1. Create and solve the explicitly double-body system. (If you didn't fix the problem with `wigley_hull` already, you'll need to do it now!)
- 1. Use the method of images to get the double-body solution using only the `demihull` panels. How many mirrors are there?
- 1. Compare the extrema of `q` and the inline `addedmass` vector between the explicit and virtual double-body panel systems. Do they match? Should they?
- 1. Compare the solve time required for the two methods. Did you get the speed-up you expected using the method of images?
- 1. **Bonus:** How many demihulls would you need to create a Wigley **catamaran** and solve for the double-body flow?
+Defining the geometry in terms of an explicit parametric surface equation is by far the fastest and easiest approach. However, most engineering programs define surfaces in other ways.
 
+1. NURBS: [Non-Uniform Rational B-Splines](https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline) are a classic method to design smooth objects like ship hulls, and form the basis of most CAD tools such as Rhino. In fact, NURBS are parametric surfaces themselves, so the methods above will work *in principle* as soon as we load the file using `FileIO.jl` and `NURBS.jl`.
+
+*In practice* however, things are more complicated. The geometry is always defined in terms of a large number of patches, many of which you won't actually want in the simulation, and many of the ones you want will have flipped normals or defined in ways that the NURBS.jl package can't read. You'll also likely need to scale, translate and rotate all the patches into position, etc, etc.
+
+Here's a simple example that does work nicely "out of the box":
 """
 
-# ╔═╡ 8c2e0174-989a-45d8-a54d-efafe5d6cb4e
-# pipeline goes here!
+# ╔═╡ c1ae7feb-35f5-4ef3-a452-b90f23305cae
+md"However, it's much more typical to require some processing first. For example here's a ship hull file:"
 
-# ╔═╡ f50d5a29-8859-4e7e-a6c1-485f0272f06c
+# ╔═╡ 5bc6c6db-2449-4cc6-b8ba-756668b56c18
+begin
+	# download from github and load using FileIO and NURBS
+	boat_url = "https://raw.githubusercontent.com/weymouth/NeumannKelvin.jl/refs/heads/main/examples/optiwise_test_step.step"
+	boat_patches = boat_url |> download |> load
+	# measure each patch as a single panel
+	patch_panels = map(patch->measure(patch,0.5,0.5,1,1),boat_patches) |> Table
+	patch_panels.dA # check areas
+end
+
+# ╔═╡ c4a881eb-2cca-4702-a1a3-45d19da3fd79
 md"""
+> The warnings are from NURBS.jl, letting us know that the input vector is being normalized to run from 0,1 for buth u,v for all 8 patches. That's no problem.
 
-## Summary
-
-In this notebook we unlocked the full potential (get it?) of the Neumann-Kelvin package for the simulation prediction pipeline.
-
-1. **Set-up**: simplified panel creation
-- Automatic methods to panelize a surface defined by a parametric surface
-- Concatenating patches of panels together to form more complex geometries (like demihulls and catamarans)
-
-2. **Solve**: efficient system description and solve
-- Wrap panels and meta-data to avoid mistakes and helper code
-- Method of images and multi-threading to speed up the solution
-
-3. **Measure**: validated functions
-- Visualize and measure on known solutions to validate approach(!)
-- Visualize and measure on new problems with confidence
-
+The areas of each patch are suspicious. There are 8, but 2 are tiny and 2 more are repeats of other patches. Let's look at the 4 unique patches...
 """
+
+# ╔═╡ 38cbcb9e-6f89-4728-bdc2-7b023fb00025
+map(patch->measure(patch,0.5,0.5,1,1),boat_patches[[1,2,4,7]]) |> Table |> viz
+
+# ╔═╡ e96e4098-d846-4256-8661-fd195b102d00
+md"""
+Since we only used one panel per patch, the shape isn't well represented yet, but if you move the view around you can see patch 7 is a bildge keel. We'll skip that surface as well.
+
+You can also see the ship model is around 300m long and has around a 30m draft. The keel is sitting on z=0, but we want to shift this down to place the waterline at z=0 so we can create a double-body prediction.
+"""
+
+# ╔═╡ d41452bf-266e-42eb-b3fe-0002427315e1
+let
+	# make z=0 the max
+	top = maximum(p->maximum(components(p.verts,3)),patch_panels)
+	patches = NURBS.translate(boat_patches[[1,2,4]],SA[0,0,-top])
+	# try panelizing!
+	viz(panelize(patches;hᵤ=10,hᵥ=5),vscale=30)
+end
+
+# ╔═╡ 67b6c1d7-48c2-4a52-ae00-33babcf27079
+md"""
+That's not terrible! It's clearly a ship sitting near z=0. But its not great either. 
+
+1. The panel sizes on the stern are enourmous. We'll have to transpose that patch and try again. Probably the bow as well. 
+1. We can see the geometry has a trim angle and almost certainly we've got it too low in the water! Ideally, we would remesh at the correct waterline, but for now we'll just undo the trim.
+"""
+
+# ╔═╡ 7b8f8584-7a35-4a9c-9642-4ad3598ef76f
+let
+	patches = boat_patches[[1,2,4]]
+	tvec = [false,true,true] # transpose the second two patches
+	trns(p) = (v,u)->p(u,v)
+	water_line = mapreduce(vcat,1:3) do i
+		f = tvec[i] ? trns(patches[i]) : patches[i]
+		d = f([0.,1],[1.])
+		tvec[i] ? d' : d
+	end
+end
+
+# ╔═╡ 6e18b85e-220e-4466-8246-746bebed1866
+md"""
+2. STL Mesh: [Stereolithography format](https://en.wikipedia.org/wiki/STL_(file_format)) described shapes as a raw, unstructured triangulated surface.
+
+This is extremely simple and general, but often requires a **lot** of triangles.
+Luckily computer scientists use STLs for most graphics applications and have developed excellent tools to speed up dealing with such meshes. We'll discuss the details in the next notebook.
+
+A more fundamental problem is that a bad STL mesh is extremely difficult to work with. Finding the 101 triangles with flipped normals, the 21 that are overlapping, and the 73 with zero-area in a 20k triangle mesh is not fun. It is also difficult to "remesh" an STL making convergence studies much more work.
+
+But when they are well-made, STL meshes work fine. Here's a nice "little" example with 1456 triangles that I found online!
+"""
+
+# ╔═╡ 2b04c118-fadb-4987-8f71-305e6e5ef5f0
+begin # 2. Solve
+	dolphin_sys = BodyPanelSystem(dolphin_panels,U=SA[0,1,0],wrap=PanelTree)
+	gmressolve!(dolphin_sys,verbose=false)
+end
+
+# ╔═╡ b3cd27dd-eef1-41f4-b753-779f727388f3
+md"Note the panel type is now `TriKernel`. Since these panels are always flat, I've chosen to use the exact Green's function from Hess to calculate the influence of each panel. Let's take a look!"
+
+# ╔═╡ 370d3120-5e56-4925-9e75-53c2e47d4f97
+viz(dolphin_sys,vscale=20) # 3. Measure
 
 # ╔═╡ c2437329-a343-4909-af0a-55820fcce5b3
 begin
@@ -276,11 +135,21 @@ end;
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
+MeshIO = "7269a6da-0436-5bbc-96c2-40638cbb6118"
+NURBS = "dde13934-061e-461b-aa91-2c0fad390a0d"
 NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
 
 [compat]
+FileIO = "~1.17.1"
+GeometryBasics = "~0.5.10"
+MeshIO = "~0.5.3"
+NURBS = "~0.8.0"
 NeumannKelvin = "~0.8.1"
+PlutoUI = "~0.7.79"
 WGLMakie = "~0.13.8"
 """
 
@@ -290,7 +159,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "83f16dfbe9c2e8fe0708689d04c29e224bc8e28b"
+project_hash = "6b1905a75e4665be8984089a3d2e65f52779ce43"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -302,6 +171,12 @@ weakdeps = ["ChainRulesCore", "Test"]
     [deps.AbstractFFTs.extensions]
     AbstractFFTsChainRulesCoreExt = "ChainRulesCore"
     AbstractFFTsTestExt = "Test"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "6e1d2a35f2f90a4bc7c2ed98079b2ba09c35b83a"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.3.2"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "2d9c9a55f9c93e8887ad391fbae72f8ef55e1177"
@@ -981,6 +856,18 @@ git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
 uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
 version = "0.0.5"
 
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "d1a86724f81bcd184a38fd284ce183ec067d71a0"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "1.0.0"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "0ee181ec08df7d7c911901ea38baf16f755114dc"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "1.0.0"
+
 [[deps.ImageAxes]]
 deps = ["AxisArrays", "ImageBase", "ImageCore", "Reexport", "SimpleTraits"]
 git-tree-sha1 = "e12629406c6c4442539436581041d372d69c55ba"
@@ -1293,6 +1180,12 @@ git-tree-sha1 = "2a7a12fc0a4e7fb773450d17975322aa77142106"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.41.2+0"
 
+[[deps.LightXML]]
+deps = ["Libdl", "XML2_jll"]
+git-tree-sha1 = "aa971a09f0f1fe92fe772713a564aa48abe510df"
+uuid = "9c8b4983-aa76-5018-a973-4c85ecc9e179"
+version = "0.9.3"
+
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -1346,6 +1239,11 @@ git-tree-sha1 = "f00544d95982ea270145636c181ceda21c4e2575"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.2.0"
 
+[[deps.MIMEs]]
+git-tree-sha1 = "c64d943587f7187e751162b3b84445bbbd79f691"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "1.1.0"
+
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "oneTBB_jll"]
 git-tree-sha1 = "282cadc186e7b2ae0eeadbd7a4dffed4196ae2aa"
@@ -1396,6 +1294,12 @@ deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
 version = "2.28.6+0"
 
+[[deps.MeshIO]]
+deps = ["ColorTypes", "FileIO", "GeometryBasics", "Printf"]
+git-tree-sha1 = "c009236e222df68e554c7ce5c720e4a33cc0c23f"
+uuid = "7269a6da-0436-5bbc-96c2-40638cbb6118"
+version = "0.5.3"
+
 [[deps.Missings]]
 deps = ["DataAPI"]
 git-tree-sha1 = "ec4f7fbeab05d7747bdf98eb74d130a2a2ed298d"
@@ -1426,6 +1330,18 @@ version = "1.2.1"
 git-tree-sha1 = "cac9cc5499c25554cba55cd3c30543cff5ca4fab"
 uuid = "46d2c3a1-f734-5fdb-9937-b9b9aeba4221"
 version = "0.2.4"
+
+[[deps.NURBS]]
+deps = ["FileIO", "LinearAlgebra", "StaticArrays", "Statistics", "Suppressor", "UUIDs", "WriteVTK"]
+git-tree-sha1 = "bf71419f679856e52b2438b0118076159ae9198d"
+uuid = "dde13934-061e-461b-aa91-2c0fad390a0d"
+version = "0.8.0"
+
+    [deps.NURBS.extensions]
+    NURBSext = "PlotlyJS"
+
+    [deps.NURBS.weakdeps]
+    PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
@@ -1603,6 +1519,12 @@ deps = ["ColorSchemes", "Colors", "Dates", "PrecompileTools", "Printf", "Random"
 git-tree-sha1 = "26ca162858917496748aad52bb5d3be4d26a228a"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
 version = "1.4.4"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Downloads", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "3ac7038a98ef6977d44adeadc73cc6f596c08109"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.79"
 
 [[deps.PolygonOps]]
 git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
@@ -1953,6 +1875,12 @@ deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.7.0+0"
 
+[[deps.Suppressor]]
+deps = ["Logging"]
+git-tree-sha1 = "6dbb5b635c5437c68c28c2ac9e39b87138f37c0a"
+uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+version = "0.2.8"
+
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -2014,6 +1942,11 @@ version = "0.5.29"
 git-tree-sha1 = "0c45878dcfdcfa8480052b6ab162cdd138781742"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.11.3"
+
+[[deps.Tricks]]
+git-tree-sha1 = "311349fd1c93a31f783f977a71e8b062a57d4101"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.13"
 
 [[deps.TriplotBase]]
 git-tree-sha1 = "4d4ed7f294cda19382ff7de4c137d24d16adc89b"
@@ -2085,6 +2018,11 @@ version = "0.3.0"
     [deps.UnsafeAtomics.weakdeps]
     LLVM = "929cbde3-209d-540e-8aea-75f648917ca0"
 
+[[deps.VTKBase]]
+git-tree-sha1 = "c2d0db3ef09f1942d08ea455a9e252594be5f3b6"
+uuid = "4004b06d-e244-455f-a6ce-a5f9919cc534"
+version = "1.0.1"
+
 [[deps.WGLMakie]]
 deps = ["Bonito", "Colors", "FileIO", "FreeTypeAbstraction", "GeometryBasics", "Hyperscript", "LinearAlgebra", "Makie", "Observables", "PNGFiles", "PrecompileTools", "RelocatableFolders", "ShaderAbstractions", "StaticArrays"]
 git-tree-sha1 = "32801246eb6c7afb0e1e49509b3ffebecb538657"
@@ -2108,6 +2046,18 @@ deps = ["LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "248a7031b3da79a127f14e5dc5f417e26f9f6db7"
 uuid = "efce3f68-66dc-5838-9240-27a6d6f5f9b6"
 version = "1.1.0"
+
+[[deps.WriteVTK]]
+deps = ["Base64", "CodecZlib", "FillArrays", "LightXML", "TranscodingStreams", "VTKBase"]
+git-tree-sha1 = "a329e0b6310244173690d6a4dfc6d1141f9b9370"
+uuid = "64499a7a-5c06-52f2-abe2-ccb03c286192"
+version = "1.21.2"
+
+[[deps.XML2_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
+git-tree-sha1 = "5c959b708667b34cb758e8d7c6f8e69b94c32deb"
+uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
+version = "2.15.1+0"
 
 [[deps.XZ_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -2251,33 +2201,22 @@ version = "4.1.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─fa570bdd-3772-4750-980d-d75cf268ffcf
 # ╠═2031a395-433a-402c-bf48-e383293efad0
-# ╠═2ca442e5-d760-44d3-a7b7-0727ed144203
-# ╠═dfa6d033-9253-47d3-85ad-9f13b4c4d5d3
-# ╠═eae81e8a-2173-4898-a36c-c6b559c814ee
-# ╟─62fec8d1-e0ca-447e-ad55-a7a53d0a6528
-# ╠═64b3c8b6-0eda-41e3-ac91-3a9c9f51006f
-# ╠═d21f51a6-86c3-4532-a84a-c72f6d92505c
-# ╟─ddf1cde1-99eb-4d37-ab82-1bbfd20d4540
-# ╠═261636cc-dd20-46b5-bbf0-3de9db04f0aa
-# ╟─7f614f43-4094-495d-9c4b-bcff1cbc90a7
-# ╠═6a0f0ecf-6926-4527-accf-c5519854879c
-# ╟─b9d28dea-9f7d-4826-8f61-4e5e82227eee
-# ╠═bed61b8b-f3fd-4b28-b62a-f6f193029da8
-# ╠═2d77ccb8-6b9d-4650-bcc1-3b8746b994d3
-# ╟─2ed32a1d-2413-45d2-85ec-a534ca3de82b
-# ╠═cb3588f4-6918-47fd-a8f4-b2771123a779
-# ╟─1a94e023-3c32-459a-98a2-bca589f8e6bd
-# ╠═53f74353-6e85-4632-ab21-36224e2f6601
-# ╠═e2eb796e-0962-4f37-a8ea-a1334c0600cb
-# ╟─e08a089d-9663-40b4-8dee-899449205bbc
-# ╠═8d968c67-59bd-48f2-87ff-448e91e5eb62
-# ╟─5c360b4a-b078-4649-a161-ea34df151310
-# ╠═6e657f83-fe06-4311-aaf5-0c88fb13dc8e
 # ╟─84fa0a7a-81c1-4199-8d58-6ee5026c7527
-# ╠═8c2e0174-989a-45d8-a54d-efafe5d6cb4e
-# ╟─f50d5a29-8859-4e7e-a6c1-485f0272f06c
+# ╠═9ef3d909-2169-4136-be87-246e72f43ee2
+# ╟─c1ae7feb-35f5-4ef3-a452-b90f23305cae
+# ╠═5bc6c6db-2449-4cc6-b8ba-756668b56c18
+# ╟─c4a881eb-2cca-4702-a1a3-45d19da3fd79
+# ╠═38cbcb9e-6f89-4728-bdc2-7b023fb00025
+# ╟─e96e4098-d846-4256-8661-fd195b102d00
+# ╠═d41452bf-266e-42eb-b3fe-0002427315e1
+# ╟─67b6c1d7-48c2-4a52-ae00-33babcf27079
+# ╠═7b8f8584-7a35-4a9c-9642-4ad3598ef76f
+# ╟─6e18b85e-220e-4466-8246-746bebed1866
+# ╠═7660e9fe-6df0-4e26-aa24-2d3b3481bb09
+# ╠═2b04c118-fadb-4987-8f71-305e6e5ef5f0
+# ╟─b3cd27dd-eef1-41f4-b753-779f727388f3
+# ╠═370d3120-5e56-4925-9e75-53c2e47d4f97
 # ╟─c2437329-a343-4909-af0a-55820fcce5b3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
