@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.8
+# v0.20.21
 
 using Markdown
 using InteractiveUtils
@@ -260,9 +260,6 @@ wgl' # transpose of the nx1 column vector into 1xn row vector
 # ╔═╡ c57279a7-0a28-4872-b14d-8a634f3253d7
 wgl'*map(test_cubic,xgl) # inner product!
 
-# ╔═╡ e16e7425-b663-4d65-b2fe-9ae892cedb18
-wgl'map(test_cubic,xgl) # juxtaposition (like 2pi = 2*pi)
-
 # ╔═╡ a397cafe-3e42-41d8-8576-9d304c7dbee6
 md"""
 I think that the inner-product is the nicest way to do the weighted sum, but feel free to use more explicit methods like the `sum` comprehension in your own code if you prefer!
@@ -274,7 +271,7 @@ $\int_a^b f(x) dx = \frac{b-a}2 \int_{-1}^1 f\left(\frac{a+b}2+\frac{b-a}2 t\rig
 
 # ╔═╡ 97682af1-bebc-49a2-9d5f-ad0acf7ddd34
 begin
-	quadgl(f) = wgl'map(f,xgl)    # generic function f
+	quadgl(f) = wgl'*map(f,xgl)    # generic function f
 	function quadgl(f,a,b)        # generic range [a,b]
 	    h,j = (b-a)/2,(a+b)/2 
 	    h*quadgl(t->f(j+h*t))
@@ -453,7 +450,7 @@ PlutoUI = "~0.7.60"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.3"
+julia_version = "1.11.5"
 manifest_format = "2.0"
 project_hash = "2cbb558438430ce8b1ff9c980ca0950ad0e9e250"
 
@@ -1021,7 +1018,7 @@ version = "0.3.27+1"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+2"
+version = "0.8.5+0"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
@@ -1734,7 +1731,6 @@ version = "1.4.1+2"
 # ╟─c48e953e-178b-4bf8-ab58-9aaa6bfae1ff
 # ╠═cc086099-18c8-474e-a0fa-1d0dbfa6b82c
 # ╠═c57279a7-0a28-4872-b14d-8a634f3253d7
-# ╠═e16e7425-b663-4d65-b2fe-9ae892cedb18
 # ╟─a397cafe-3e42-41d8-8576-9d304c7dbee6
 # ╠═97682af1-bebc-49a2-9d5f-ad0acf7ddd34
 # ╠═886562c5-0f42-4d26-9a98-5632281f05d8
