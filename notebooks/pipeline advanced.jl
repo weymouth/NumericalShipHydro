@@ -27,7 +27,7 @@ begin # 1. Set-up
 	using GeometryBasics, MeshIO
 	dolphin_url = "https://raw.githubusercontent.com/weymouth/NeumannKelvin.jl/refs/heads/main/examples/LowPolyDolphin.stl"
 	dolphin_panels = dolphin_url |> download |> load |> panelize
-	viz(dolphin_panels,vscale=10)
+	viz(dolphin_panels,vscale=10,colormap=:lake)
 end
 
 # ╔═╡ 84fa0a7a-81c1-4199-8d58-6ee5026c7527
@@ -38,28 +38,24 @@ Defining the geometry in terms of an explicit parametric surface equation is by 
 
 ## 1. NURBS: [Non-Uniform Rational B-Splines](https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline) 
 
-NURBS are a classic method to design smooth objects like ship hulls, and form the basis of most CAD tools such as Rhino and SolidWorks and some computer graphics programs like Blender. The define the `x,y,z` position of the surface as a function of `u,v` inputs, like the surfaces we used in the last notebook, but their shape is easily modified by shifting the spline control points.
+NURBS are a classic method to design smooth objects like ship hulls, and form the basis of most CAD tools such as Rhino and SolidWorks and some computer graphics programs like Blender. NURBS define the `x,y,z` position of the surface as a function of `u,v` inputs, like the surfaces we used in the last notebook, but their shape is easily modified via the spline control points.
 
-*In principle*, since NURBS are parametric surfaces, the methods used in the last notebook will work as soon as we load a "STP" file using `FileIO.jl` and `NURBS.jl`. Here's a simple example that works nicely "out of the box":
+Since NURBS are parametric surfaces, the methods used in the last notebook will work as soon as we load a "STP" file using `FileIO.jl` and `NURBS.jl`. Here's a simple example that works nicely "out of the box":
 """
 
 # ╔═╡ 6e18b85e-220e-4466-8246-746bebed1866
 md"""
 *In practice* however, things are more complicated. The geometry is always defined using a large number of patches, many of which you won't actually want in the simulation. Many of the ones you _do_ want will have flipped normals or be defined in ways that the NURBS.jl package can't read. You'll also likely need to scale, translate and rotate all the patches into position, and potentially trim them as well. I've included a nontrivial example at the bottom of the notebook.
 
-## 2. STL Mesh: [Stereolithography format]
+## 2. STL Mesh: [Stereolithography format](https://en.wikipedia.org/wiki/STL_(file_format))
 
-STL (https://en.wikipedia.org/wiki/STL_(file_format)) is an extremely common format used in 3D printing and computer graphics. It describes a surface as a raw, unstructured mesh of triangular faces, oriented using the right-hand rule. 
+STL is an extremely common format used in 3D printing and computer graphics. It describes a surface as a raw, unstructured mesh of triangular faces, oriented using the right-hand rule. 
 
 The format is widely used because of the generality, but it is _MUCH_ less efficient than NURBS:
 
-> "It is not possible to use triangles to perfectly represent curved surfaces. To compensate, users often save **enormous** STL files to reduce the inaccuracy. However, native formats associated with many 3D design applications use mathematical surfaces to preserve detail losslessly in small files. For example, Rhino 3D and Blender implement NURBS to create true curved surfaces and store them in their respective native file formats, but must generate a triangle mesh when exporting a model to the STL format." - Wikipedia, link above
+> "It is not possible to use triangles to perfectly represent curved surfaces. To compensate, users often save **enormous** STL files to reduce the inaccuracy. However, native formats associated with many 3D design applications use mathematical surfaces to preserve detail losslessly in small files. For example, Rhino 3D and Blender implement NURBS to create true curved surfaces and store them in their respective native file formats, but must generate a triangle mesh when exporting a model to the STL format." - [Wikipedia](https://en.wikipedia.org/wiki/STL_(file_format)#Characteristics)
 
-Luckily computer scientists using STLs have developed excellent tools to speed up dealing with such meshes. I've used those method in the example below, but I will hold off explaining them until the next notebook.
-
-A more fundamental problem is that a *bad* STL mesh is extremely difficult to work with. Finding the few triangles with flipped normals, or overlapping faces in a 20k face mesh is not fun. It is also difficult to "remesh" an STL making convergence studies much more work.
-
-But when they are well-made, STL meshes work fine. Here's a nice "little" example with 1456 triangles that I found online!
+Luckily, computer scientists (and physical scientists) have developed excellent tools to speed up dealing with such meshes. I've used those method in the example below, but I will hold off explaining them until the next notebook. Here's a nice "little" example with 1456 triangles that I found online!
 """
 
 # ╔═╡ 2b04c118-fadb-4987-8f71-305e6e5ef5f0
@@ -75,16 +71,17 @@ md"Note the panel type is now `TriKernel`. Since these panels are always flat, I
 viz(dolphin_sys,vscale=20) # 3. Measure
 
 # ╔═╡ c1ae7feb-35f5-4ef3-a452-b90f23305cae
-md"
+md"""
+
 ## Input processing example:
 
 The examples above have very clean input files, but it's much more typical for a file to require some processing. 
 
-If you have a *bad* triangle mesh, you will need to find/export another one or fix it using a dedicated meshing library. **You will also need to generate multiple versions of any STL-defined geometry so you can do a convergence study on you flow quantities of interest.**
+If you have a bad STL mesh, you will need to find/export another one or fix it using a dedicated meshing library. Finding the few triangles with flipped normals, or overlapping faces in a 20k face mesh *by hand* is not fun.  **You will also need to generate multiple versions of any STL-defined geometry so you can do a convergence study on you flow quantities of interest.**
 
-If you have a reasonably good NURBS file, you _can_ try to do the clean up in the notebook. I go through an example of this process below:
+If you have a reasonably good NURBS file, you can do the clean up in a notebook. In that case, you could use *one* geometry file to predict across a range of geometric conditions, like sinkage and trim tests. I go through an example of this process below:
 
-First I import a ship hull file and check each patch area."
+First I import a ship hull file and check each patch area."""
 
 # ╔═╡ 5bc6c6db-2449-4cc6-b8ba-756668b56c18
 begin
@@ -103,48 +100,40 @@ The areas of each patch are suspicious. There are 8, but 2 are tiny and 2 are re
 """
 
 # ╔═╡ 38cbcb9e-6f89-4728-bdc2-7b023fb00025
-map(patch->measure(patch,0.5,0.5,1,1),boat_patches[[1,2,4,7]]) |> Table |> viz
+map(patch->measure(patch,0.5,0.5,1,1,cubature=true),boat_patches[[1,2,4,7]]) |> Table |> viz
 
 # ╔═╡ e96e4098-d846-4256-8661-fd195b102d00
 md"""
-Since we only used one panel per patch, the shape isn't well represented yet, but if you move the view around you can see patch 7 is a bildge keel. We'll skip that surface as well.
+Since we only used one panel per patch, the shape isn't well represented yet, but comparing to the areas, we can see patch 1 is the midbody, patch 2 is the bow, patch 4 is the stern and patch 7 is a bildge keel. We'll skip that surface as well. 
 
-You can also see the ship model is around 300m long and 30m tall. The keel is sitting on z=0, but we want to shift this down to place the waterline at z=0 so we can create a double-body prediction.
+You can also see the ship model is around 300m long and 30m tall. So we don't want 1mx1m panels. Let's try 10m x 5m.
 """
 
 # ╔═╡ d41452bf-266e-42eb-b3fe-0002427315e1
-let
-	# make z=0 the max
-	patches = NURBS.translate(boat_patches[[1,2,4]],SA[0,0,-30])
-	# try panelizing!
-	viz(panelize(patches;hᵤ=10,hᵥ=5),vscale=30)
-end
+viz(panelize(boat_patches[[1,2,4]];hᵤ=10,hᵥ=5),vscale=30,colormap=:autumn1)
 
 # ╔═╡ 67b6c1d7-48c2-4a52-ae00-33babcf27079
 md"""
-That's not terrible! It's clearly a ship sitting near z=0. But its not great either. 
+That's not terrible! It's clearly a ship... but its not great either. 
 
 1. The panels on the bow and stern are (more than) 10m tall intead of 10m long. Those two patches must be transposed.
-1. We can see the geometry has a trim angle and we've got it too low in the water. Ideally, we would reparameterize the surface at the correct waterline, but for now we'll just undo the trim and pretend is (very) heavily loaded.
+1. We can see the geometry has a trim angle and it's sitting on z=0 instead of have that at the waterline. Since the draft should be 18.5m, we'll shift is down and use `submerge=true` to trim the surface at z=0!
 1. The surface is missing the transom! Unfortunately `NURBS.jl` doesn't know how to load that type of surface. We could try to add in a set of panels by hand, but we'll skip it here.
 """
 
 # ╔═╡ 7b8f8584-7a35-4a9c-9642-4ad3598ef76f
 begin
-	# translate and rotate
-	patches = NURBS.translate(boat_patches[[1,2,4]],SA[0,0,-30])
-	NURBS.rotate!(patches,SA[0,1,0],4/300)	
+	# shift down
+	patches = NURBS.translate(boat_patches[[1,2,4]],SA[0,0,-18.5])
 	
 	# transpose the bow and stern patches
 	tvec = [false,true,true] 
-	h=(6,3) # set max panel size
 
 	# map through the patches, transposing, panelizing, and concantenating
 	panels = mapreduce(vcat,eachindex(patches)) do i
-	    (hᵤ,hᵥ) = tvec[i] ? reverse(h) : h
-	    panelize(patches[i];hᵤ,hᵥ,transpose=tvec[i],cubature=true)
+	    panelize(patches[i];hᵤ=6,hᵥ=3,transpose=tvec[i],cubature=true,submerge=true)
 	end
-	viz(panels,vscale=30)
+	viz(panels,vscale=30,colormap=:autumn1)
 end
 
 # ╔═╡ 20a6c891-6087-4859-9271-377877470e94
@@ -181,7 +170,7 @@ FileIO = "~1.17.1"
 GeometryBasics = "~0.5.10"
 MeshIO = "~0.5.3"
 NURBS = "~0.8.0"
-NeumannKelvin = "~0.8.1"
+NeumannKelvin = "~0.8.2"
 PlutoUI = "~0.7.79"
 WGLMakie = "~0.13.8"
 """
@@ -192,7 +181,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.2"
 manifest_format = "2.0"
-project_hash = "6b1905a75e4665be8984089a3d2e65f52779ce43"
+project_hash = "cfc6cf830189f730c3bba810eb92683b00d76633"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1394,9 +1383,9 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["AcceleratedKernels", "DataInterpolations", "FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "HCubature", "ImplicitBVH", "Krylov", "LinearAlgebra", "LinearOperators", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "TupleTools", "TypedTables"]
-git-tree-sha1 = "ef87ef6dc9e081a84b83b0a17fa29a7bcff4930c"
+git-tree-sha1 = "80c5183ab5e05d542fb3337090583a76072074af"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.8.1"
+version = "0.8.2"
 
     [deps.NeumannKelvin.extensions]
     NeumannKelvinGeometryBasicsExt = "GeometryBasics"
@@ -1466,9 +1455,9 @@ version = "1.6.1"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "f19301ae653233bc88b1810ae908194f07f8db9d"
+git-tree-sha1 = "c9cbeda6aceffc52d8a0017e71db27c7a7c0beaf"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.4+0"
+version = "3.5.5+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -2019,9 +2008,9 @@ version = "0.4.1"
 
 [[deps.Unitful]]
 deps = ["Dates", "LinearAlgebra", "Random"]
-git-tree-sha1 = "c25751629f5baaa27fef307f96536db62e1d754e"
+git-tree-sha1 = "57e1b2c9de4bd6f40ecb9de4ac1797b81970d008"
 uuid = "1986cc42-f94f-5a68-af5c-568840ba703d"
-version = "1.27.0"
+version = "1.28.0"
 
     [deps.Unitful.extensions]
     ConstructionBaseUnitfulExt = "ConstructionBase"
