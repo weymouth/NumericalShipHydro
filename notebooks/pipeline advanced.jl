@@ -32,25 +32,32 @@ end
 
 # ╔═╡ 84fa0a7a-81c1-4199-8d58-6ee5026c7527
 md"""
-## Advanced pipe-line examples: Imported geometry files
+# Advanced pipe-line examples: Using geometry files
 
-Defining the geometry in terms of an explicit parametric surface equation is by far the fastest and easiest approach. However, most engineering programs define surfaces in other ways.
+Defining the geometry in terms of an explicit parametric surface equation is by far the fastest and easiest approach. However, most engineering programs use and export surfaces in one of two other ways.
 
-1. NURBS: [Non-Uniform Rational B-Splines](https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline) are a classic method to design smooth objects like ship hulls, and form the basis of most CAD tools such as Rhino. In fact, NURBS are parametric surfaces themselves, so the methods above will work *in principle* as soon as we load the file using `FileIO.jl` and `NURBS.jl`.
+## 1. NURBS: [Non-Uniform Rational B-Splines](https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline) 
 
-*In practice* however, things are more complicated. The geometry is always defined in terms of a large number of patches, many of which you won't actually want in the simulation, and many of the ones you want will have flipped normals or defined in ways that the NURBS.jl package can't read. You'll also likely need to scale, translate and rotate all the patches into position, etc, etc.
+NURBS are a classic method to design smooth objects like ship hulls, and form the basis of most CAD tools such as Rhino and SolidWorks and some computer graphics programs like Blender. The define the `x,y,z` position of the surface as a function of `u,v` inputs, like the surfaces we used in the last notebook, but their shape is easily modified by shifting the spline control points.
 
-Here's a simple example that does work nicely "out of the box":
+*In principle*, since NURBS are parametric surfaces, the methods used in the last notebook will work as soon as we load a "STP" file using `FileIO.jl` and `NURBS.jl`. Here's a simple example that works nicely "out of the box":
 """
 
 # ╔═╡ 6e18b85e-220e-4466-8246-746bebed1866
 md"""
-2. STL Mesh: [Stereolithography format](https://en.wikipedia.org/wiki/STL_(file_format)) described shapes as a raw, unstructured triangulated surface.
+*In practice* however, things are more complicated. The geometry is always defined using a large number of patches, many of which you won't actually want in the simulation. Many of the ones you _do_ want will have flipped normals or be defined in ways that the NURBS.jl package can't read. You'll also likely need to scale, translate and rotate all the patches into position, and potentially trim them as well. I've included a nontrivial example at the bottom of the notebook.
 
-This is extremely simple and general, but often requires a **lot** of triangles.
-Luckily computer scientists use STLs for most graphics applications and have developed excellent tools to speed up dealing with such meshes. We'll discuss the details in the next notebook.
+## 2. STL Mesh: [Stereolithography format]
 
-A more fundamental problem is that a bad STL mesh is extremely difficult to work with. Finding the 101 triangles with flipped normals, the 21 that are overlapping, and the 73 with zero-area in a 20k triangle mesh is not fun. It is also difficult to "remesh" an STL making convergence studies much more work.
+STL (https://en.wikipedia.org/wiki/STL_(file_format)) is an extremely common format used in 3D printing and computer graphics. It describes a surface as a raw, unstructured mesh of triangular faces, oriented using the right-hand rule. 
+
+The format is widely used because of the generality, but it is _MUCH_ less efficient than NURBS:
+
+> "It is not possible to use triangles to perfectly represent curved surfaces. To compensate, users often save **enormous** STL files to reduce the inaccuracy. However, native formats associated with many 3D design applications use mathematical surfaces to preserve detail losslessly in small files. For example, Rhino 3D and Blender implement NURBS to create true curved surfaces and store them in their respective native file formats, but must generate a triangle mesh when exporting a model to the STL format." - Wikipedia, link above
+
+Luckily computer scientists using STLs have developed excellent tools to speed up dealing with such meshes. I've used those method in the example below, but I will hold off explaining them until the next notebook.
+
+A more fundamental problem is that a *bad* STL mesh is extremely difficult to work with. Finding the few triangles with flipped normals, or overlapping faces in a 20k face mesh is not fun. It is also difficult to "remesh" an STL making convergence studies much more work.
 
 But when they are well-made, STL meshes work fine. Here's a nice "little" example with 1456 triangles that I found online!
 """
@@ -71,9 +78,13 @@ viz(dolphin_sys,vscale=20) # 3. Measure
 md"
 ## Input processing example:
 
-These were very clean input files, but it's much more typical for a file to require some processing. This _can_ be done in a notebook for reasonably good NURBS geometries.
+The examples above have very clean input files, but it's much more typical for a file to require some processing. 
 
-For example, below I import a ship hull file and check each patches area."
+If you have a *bad* triangle mesh, you will need to find/export another one or fix it using a dedicated meshing library. **You will also need to generate multiple versions of any STL-defined geometry so you can do a convergence study on you flow quantities of interest.**
+
+If you have a reasonably good NURBS file, you _can_ try to do the clean up in the notebook. I go through an example of this process below:
+
+First I import a ship hull file and check each patch area."
 
 # ╔═╡ 5bc6c6db-2449-4cc6-b8ba-756668b56c18
 begin
@@ -88,7 +99,7 @@ end
 md"""
 > The warnings are from NURBS.jl, letting us know that the input vector is being normalized to run from 0,1 for buth u,v for all 8 patches. That's no problem.
 
-The areas of each patch are suspicious. There are 8, but 2 are tiny and 2 are repeated values of other patches. Let's look at the 4 unique patches...
+The areas of each patch are suspicious. There are 8, but 2 are tiny and 2 are repeated values of other patches. Let's look at the 4 unique patches with significant area...
 """
 
 # ╔═╡ 38cbcb9e-6f89-4728-bdc2-7b023fb00025
@@ -98,7 +109,7 @@ map(patch->measure(patch,0.5,0.5,1,1),boat_patches[[1,2,4,7]]) |> Table |> viz
 md"""
 Since we only used one panel per patch, the shape isn't well represented yet, but if you move the view around you can see patch 7 is a bildge keel. We'll skip that surface as well.
 
-You can also see the ship model is around 300m long with around a 30m draft. The keel is sitting on z=0, but we want to shift this down to place the waterline at z=0 so we can create a double-body prediction.
+You can also see the ship model is around 300m long and 30m tall. The keel is sitting on z=0, but we want to shift this down to place the waterline at z=0 so we can create a double-body prediction.
 """
 
 # ╔═╡ d41452bf-266e-42eb-b3fe-0002427315e1
@@ -113,9 +124,9 @@ end
 md"""
 That's not terrible! It's clearly a ship sitting near z=0. But its not great either. 
 
-1. The panel sizes on the stern are enourmous. We'll have to transpose that patch and try again. Probably the bow as well. 
-1. We can see the geometry has a trim angle and almost certainly we've got it too low in the water! Ideally, we would remesh at the correct waterline, but for now we'll just undo the trim.
-1. Missing the transome. Unfortunately NURBS.jl doesn't know how to load that type of surface. We could try to add in a set of panels by hand, but we'll skip it here.
+1. The panels on the bow and stern are (more than) 10m tall intead of 10m long. Those two patches must be transposed.
+1. We can see the geometry has a trim angle and we've got it too low in the water. Ideally, we would reparameterize the surface at the correct waterline, but for now we'll just undo the trim and pretend is (very) heavily loaded.
+1. The surface is missing the transom! Unfortunately `NURBS.jl` doesn't know how to load that type of surface. We could try to add in a set of panels by hand, but we'll skip it here.
 """
 
 # ╔═╡ 7b8f8584-7a35-4a9c-9642-4ad3598ef76f
@@ -146,7 +157,7 @@ sys = BodyPanelSystem(panels,sym_axes=(2,3)) |> directsolve!
 viz(sys,vscale=60)
 
 # ╔═╡ 58504db9-6f41-4e7b-bd5f-a80e981ea5ae
-md"""Looking pretty good!"""
+md"Looks pretty good!"
 
 # ╔═╡ c2437329-a343-4909-af0a-55820fcce5b3
 begin
@@ -179,7 +190,7 @@ WGLMakie = "~0.13.8"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.2"
 manifest_format = "2.0"
 project_hash = "6b1905a75e4665be8984089a3d2e65f52779ce43"
 
@@ -1445,7 +1456,7 @@ version = "3.4.4+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.5+0"
+version = "0.8.1+2"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "NetworkOptions", "OpenSSL_jll", "Sockets"]
