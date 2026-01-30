@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.21
+# v0.20.10
 
 using Markdown
 using InteractiveUtils
@@ -38,7 +38,7 @@ Defining the geometry in terms of an explicit parametric surface equation is by 
 
 ## 1. NURBS: [Non-Uniform Rational B-Splines](https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline) 
 
-NURBS are a classic method to design smooth objects like ship hulls, and form the basis of most CAD tools such as Rhino and SolidWorks and some computer graphics programs like Blender. NURBS define the `x,y,z` position of the surface as a function of `u,v` inputs, like the surfaces we used in the last notebook, but their shape is easily modified via the spline control points.
+NURBS are used to describe smooth objects like ship hulls, and form the basis of most CAD tools such as Rhino and SolidWorks and some computer graphics programs like Blender. NURBS define the `x,y,z` position of the surface as a function of `u,v` inputs, like the surfaces we used in the last notebook, but their shape is easily modified via the spline control points.
 
 Since NURBS are parametric surfaces, the methods used in the last notebook will work as soon as we load a "STP" file using `FileIO.jl` and `NURBS.jl`. Here's a simple example that works nicely "out of the box":
 """
@@ -77,67 +77,73 @@ md"""
 
 The examples above have very clean input files, but it's much more typical for a file to require some processing. 
 
-If you have a bad STL mesh, you will need to find/export another one or fix it using a dedicated meshing library. Finding the few triangles with flipped normals, or overlapping faces in a 20k face mesh *by hand* is not fun.  **You will also need to generate multiple versions of any STL-defined geometry so you can do a convergence study on you flow quantities of interest.**
+If you have a bad STL mesh, you will need to find/export another one or fix it using a dedicated meshing library. Finding the few triangles with flipped normals, or overlapping faces in a 20k face mesh in a notebook is not fun.  **You will also need to generate multiple versions of any STL-defined geometry so you can do a convergence study on you flow quantities of interest.**
 
-If you have a reasonably good NURBS file, you can do the clean up in a notebook. In that case, you could use *one* geometry file to predict across a range of geometric conditions, like sinkage and trim tests. I go through an example of this process below:
+If you have a reasonably good NURBS file, you can do the clean up in a notebook. In that case, you could use *one* geometry file to predict across a range of geometric conditions, like sinkage and trim tests. 
 
-First I import a ship hull file and check each patch area."""
+---
+### Ship hull example
+
+First I import a ship hull file and check each patch area using a helper `measurepatch` function."""
 
 # ╔═╡ 5bc6c6db-2449-4cc6-b8ba-756668b56c18
 begin
 	# download from github and load using FileIO and NURBS
 	boat_url = "https://raw.githubusercontent.com/weymouth/NeumannKelvin.jl/refs/heads/main/examples/optiwise_test_step.step"
 	boat_patches = boat_url |> download |> load
-	# measure each patch as a single panel
-	map(patch->measure(patch,0.5,0.5,1,1,cubature=true).dA,boat_patches) # check areas
+	# measure each patch as a single panel for initial processing
+	measurewhole(patch) = measure(patch,0.5,0.5,1,1,cubature=true)
+	# get areas
+	[measurewhole(patch).dA for patch in boat_patches]
 end
 
 # ╔═╡ c4a881eb-2cca-4702-a1a3-45d19da3fd79
 md"""
-> The warnings are from NURBS.jl, letting us know that the input vector is being normalized to run from 0,1 for buth u,v for all 8 patches. That's no problem.
+> The warnings are from NURBS.jl, letting us know that the input vector is being normalized to run from 0,1 for u and v for each patch. That's no problem.
 
-The areas of each patch are suspicious. There are 8, but 2 are tiny and 2 are repeated values of other patches. Let's look at the 4 unique patches with significant area...
+Looking at the area vector above, we see there are eight patches, but two are relatively tiny and two others are _exactly_ repeated values of other patches. Let's look at the four unique patches with significant area...
 """
 
 # ╔═╡ 38cbcb9e-6f89-4728-bdc2-7b023fb00025
-map(patch->measure(patch,0.5,0.5,1,1,cubature=true),boat_patches[[1,2,4,7]]) |> Table |> viz
+map(measurewhole,boat_patches[[1,2,4,7]]) |> Table |> viz
 
 # ╔═╡ e96e4098-d846-4256-8661-fd195b102d00
 md"""
-Since we only used one panel per patch, the shape isn't well represented yet, but comparing to the areas, we can see patch 1 is the midbody, patch 2 is the bow, patch 4 is the stern and patch 7 is a bildge keel. We'll skip that surface as well. 
+Since we measured the whole patch as one panel, the shape isn't well represented yet, but you can see the ship model is around 300m long and 30m tall. By comparing the areas to the vector above, we can see patch 1 is the midbody, patch 2 is the bow, patch 4 is the stern, and (by rotating the plot) patch 7 is a bildge keel. We'll skip that bildge surface as well.
 
-You can also see the ship model is around 300m long and 30m tall. So we don't want 1mx1m panels. Let's try 10m x 5m.
+Using `panelize(;hᵤ=1,hᵥ=1)` would result in in 1500 panels. Let's start with 10m x 5m instead.
 """
 
 # ╔═╡ d41452bf-266e-42eb-b3fe-0002427315e1
-viz(panelize(boat_patches[[1,2,4]];hᵤ=10,hᵥ=5),vscale=30,colormap=:autumn1)
+viz(panelize(boat_patches[[2,3,4]];hᵤ=10,hᵥ=5),vscale=30,colormap=:autumn1)
 
 # ╔═╡ 67b6c1d7-48c2-4a52-ae00-33babcf27079
 md"""
 That's not terrible! It's clearly a ship... but its not great either. 
 
-1. The panels on the bow and stern are (more than) 10m tall intead of 10m long. Those two patches must be transposed.
-1. We can see the geometry has a trim angle and it's sitting on z=0 instead of have that at the waterline. Since the draft should be 18.5m, we'll shift is down and use `submerge=true` to trim the surface at z=0!
-1. The surface is missing the transom! Unfortunately `NURBS.jl` doesn't know how to load that type of surface. We could try to add in a set of panels by hand, but we'll skip it here.
+1. The panels on the bow and stern are way bigger than we wanted (150m²!!), and they are >10m tall intead of 10m long. We will transpose those patches so `u` runs roughly along x and `v` runs roughly along z. Hopefully this will also help panelize do a better job giving us panels of the correct size.
+1. We can see the geometry has a trim angle and it's keel is at z=0 instead of it's waterline. Since the draft should be 18.5m, we'll shift it down and use `submerge=true` to trim the surface at z=0.
+1. The surface is missing the transom! Unfortunately `NURBS.jl` didn't sucesessfully load that surface. We could try to fix the input file or add in a set of panels by hand, but we'll skip it here.
 """
 
 # ╔═╡ 7b8f8584-7a35-4a9c-9642-4ad3598ef76f
 begin
-	# shift down
-	patches = NURBS.translate(boat_patches[[1,2,4]],SA[0,0,-18.5])
-	
-	# transpose the bow and stern patches
-	tvec = [false,true,true] 
-
 	# map through the patches, transposing, panelizing, and concantenating
-	panels = mapreduce(vcat,eachindex(patches)) do i
-	    panelize(patches[i];hᵤ=6,hᵥ=3,transpose=tvec[i],cubature=true,submerge=true)
+	panels = mapreduce(vcat,[1,2,4]) do i
+		S(u,v) = boat_patches[i](u,v)[1]-SA[0,0,18.5] # shift the patch down
+		transpose = i≠1  # don't transpose the midbody
+	    panelize(hᵤ=6,hᵥ=3,flip=transpose,cubature=true,submerge=true) do u,v
+			transpose ? S(v,u) : S(u,v) # transpose u & v
+		end
 	end
 	viz(panels,vscale=30,colormap=:autumn1)
 end
 
 # ╔═╡ 20a6c891-6087-4859-9271-377877470e94
-md"""I think those look good enough! Let's get the double-body flow."""
+md"""
+Not perfect, but much better! The panels are around 10mx5m (smaller in regions of high curvature) and oriented correctly. The ship is below z=0 and has the correct draft. 
+
+We're still missing the transom and the trimmed waterline is a little jagged, but this should give us a perfectly good double-body flow. Let's do it!"""
 
 # ╔═╡ d6826dd7-b2b2-44ab-8032-59dc85d4f57e
 sys = BodyPanelSystem(panels,sym_axes=(2,3)) |> directsolve!

@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.21
+# v0.20.10
 
 using Markdown
 using InteractiveUtils
@@ -16,6 +16,9 @@ macro bind(def, element)
     #! format: on
 end
 
+# ╔═╡ 0a16323f-657c-4886-864d-bfdae1f15bc9
+using Plots,Printf
+
 # ╔═╡ a27b8f0a-dc4a-452e-88ed-8fcc0b8a1a9a
 begin
 	using PlutoUI
@@ -24,9 +27,6 @@ begin
 	zs = @bind z1 Slider([-1,-0.1,-0.01,-0.001],default=-0.1,show_value=true)
 	md"""x $xs,  y $ys,  z $zs"""
 end
-
-# ╔═╡ 03b7fe33-35ee-4add-8d7a-3bcdc8c4b6c4
-using Printf
 
 # ╔═╡ 58f96f50-045c-4549-90c5-5d594d7218f4
 begin
@@ -47,18 +47,6 @@ begin
 	sNgk=@sprintf "∫Nᵢ=%.3f, error≈%.1e, fevals=%i" Ngk...
 	sWgk=@sprintf "∫Wᵢ=%.3f, error≈%.1e, fevals=%i" Wgk...
 end;
-
-# ╔═╡ 6a32d7b0-b49f-4157-92f7-3d487196cf46
-begin
-	using Plots
-	let
-		z = z1
-		plt1 = plot(range(-1,1,100),T->Ni(x,y,z,T),ylabel="Ni",label=sNgk)
-		b = √abs(-3log(10)/z)
-		plt2 = plot(range(-b,b,1000),T->Wi(x,y,z,T),ylabel="Wi",label=sWgk)
-		plot(plt1,plt2,layout=(2,1))
-	end
-end
 
 # ╔═╡ e02bb307-a92d-4564-9d6e-c46f86ee94c8
 using NeumannKelvin:nearfield
@@ -108,22 +96,31 @@ where $i$ is the imaginary unit, $\Im(\zeta)$ returns the imaginary part of the 
 I've plotted these two integrands $N_i,W_i$ as a function of $T$. Play with the source location $x,y,z$ to see how the integrands change.
 """
 
+# ╔═╡ 6a32d7b0-b49f-4157-92f7-3d487196cf46
+let
+	z = z1
+	plt1 = plot(cos.(range(0,π,100)),T->Ni(x,y,z,T),ylabel="Ni",label=sNgk)
+	b = min(20,√abs(-3log(10)/z))
+	plt2 = plot(range(-b,b,1000),T->Wi(x,y,z,T),ylabel="Wi",xlabel="T",label=sWgk)
+	plot(plt1,plt2,layout=(2,1))
+end
+
 # ╔═╡ f4588bb2-8605-42b7-b149-7f9f33044f6b
 md"""
 ## Advanced Numerical Integration
 
-The plots show the integrands depend sensitively on $\vec x$, especially $W_i$ which oscillates extremely fast when $x^2+y^2 \gg z^2$. Our previous method of a 2-point (or even a 15-point) Gauss-Legendre quadrature won't be able to accurately estimate the integrals. 
+The plots show the integrands depend sensitively on $\vec x$ and $T$, especially $W_i$ which oscillates extremely fast when $x^2+y^2 \gg z^2$. Our previous method of a 2-point (or even a 15-point) Gauss-Legendre quadrature won't be able to accurately estimate the integrals. 
 
 > Click the check box by the top figure to see what happens to the potential and free-surface integrals when we try it!
 
 We'll consider three methods to do these integrals, in order of "specialization". 
 
-### 1. Adaptive quadratures
+## 1. Adaptive quadratures
 
 The most general approach (and the one you should always try first) is to use an [adaptive quadrature](https://en.wikipedia.org/wiki/Adaptive_quadrature) such as the
 adaptive Gaussian-Konrad package [`quadgk.jl`](https://juliamath.github.io/QuadGK.jl/stable/) to perform the integrations. 
- - These methods use two sets of quadrature rules to estimate both the integral **and the error**. 
- - If the error is higher than a user-set tolerance, they subdivide the interval and repeat until convergence.
+ - This method use two sets of quadrature rules to estimate both the integral **and the error**. 
+ - If the error is higher than a user-set tolerance, subdivide the interval and repeat until convergence.
 
 I've used the `quadgk` function in the code block below, and printed the results (including the error estimate and the number of function evaluations) in the plots above.
 """
@@ -155,11 +152,11 @@ x_cases = [(-R*cos(atan(a)),R*sin(atan(a)),-z)
 # ╔═╡ a7c23f1c-f553-4607-8e06-d8c096260f8f
 md"""
 
-## Activity
+### Activity
  - How many times will we need to evaluate the green function $\varphi$ in a 200 panel simulation? What about 2000 panels?
  - How much time can we spend improving this quadrature and still come out ahead?
 
-### 2. Machine Learning
+## 2. Machine Learning
 
 These days, AI and [machine learning](https://en.wikipedia.org/wiki/Machine_learning) are the first solution to *any* problem. Despite all the hype, this isn't a remotely new idea in science & engineering - we've been "curve fitting" since [Legendre and Gauss developed least-squares regression in 1800](https://en.wikipedia.org/wiki/Least_squares#The_method)!
 
@@ -198,17 +195,28 @@ end
 
 # ╔═╡ 0a9c0799-ad81-400e-adb1-9e46d1a1328c
 md"
-
- - Every function evaluation after the first one is crazy fast! `nearfield` is **~1000 times faster** than using `quadgk`!!
+Nice!
+ - The `nearfield` function is **~1000 times faster** than using `quadgk`!!
  - The generalization error is tiny; less than 0.02%!
-
 ---
 "
+
+# ╔═╡ 21db612f-8023-4130-85f1-e6829d7ecec7
+md"""x $xs,  y $ys,  z $zs"""
+
+# ╔═╡ bea64deb-646f-4b22-82fa-7abe7c64d15c
+let
+	z = z1
+	b = min(10,√abs(-3log(10)/z))
+	plot(range(-b,b,1000),T->Wi(x,y,z,T),fill=(0,:blue,0.2),label="Wi",xlabel="T")
+	T₀ = y==0 ? [0.] : @. (-x+[-1,1]*√(max(0,x^2-8y^2)))/4y
+	scatter!(T₀,T->Wi(x,y,z,T),label="T₀",xlims=(-b,b))
+end
 
 # ╔═╡ 7898c3e1-6224-4200-9bae-e1d68627c6ab
 md"""
 
-### 3a. Stationary Phase
+## 3a. Stationary Phase
 
 Now let's consider $W$. The fundamental problem is that the integrand 
 
@@ -216,11 +224,11 @@ $W_i=\exp(z(1+T^2))\sin(ψ(T))$
 
 dies out very slowly if $z\rightarrow 0$, making it very hard for `quadgk` to resolve all the waves. However, **the contribution of most of the waves cancel out!** Only the regions where $\psi'\approx 0$ (where the phase is "stationary") make a significant contribution to the integral. 
 
-Since the largest contributions are from the stationary points, a very simple estimate of the integral is to evalute the integrand at **those points alone**. You can ignore the rest of the values of T and get the integral estimate by hand!
+Since the largest contributions are from the stationary points, a very simple estimate of the integral is to evaluate the integrand at **those points alone**. This is called the method of stationary phase.
 
-> This comes up in wave analysis all the time, and the method of Stationary Phase was developed by [Lord Kelvin](https://en.wikipedia.org/wiki/Lord_Kelvin) in the late 1800s to approximate such integrals. Here's a [physics video](https://www.youtube.com/watch?v=-UgQEHHXTRM) where stationary phase is used to derive the group velocity of a wave. 
+> This problem comes up in wave analysis all the time, and [Lord Kelvin](https://en.wikipedia.org/wiki/Lord_Kelvin) developed the method in 1887 to approximate such integrals by hand. Here's a [physics video](https://www.youtube.com/watch?v=-UgQEHHXTRM) where stationary phase is used to derive the group velocity of a wave.
 
-This means the stationary points are the critical points for determining the integral. Our critical points $T_0$ satisfy
+In essence, the stationary points are the _critical points_ for determining the integral. For $W_i$, the stationary points $T_0$ satisfy
 
 $\psi'(T_0)=\frac{x T_0+y(2T_0^2+1)}{\sqrt{1+T_0^2}} = 0$
 
@@ -230,16 +238,17 @@ $T_0 = \frac {-x\pm\sqrt{x^2-8y^2}}{4y}$
 
 So there are two stationary points depending on the $x,y$ position. These are the critical points for our integral.
 
-## Activity
+### Activity
+
  - Where do the stationary points converge?
  - How does this relate to the famous [Kelvin wake angle](https://en.wikipedia.org/wiki/Kelvin_wake_pattern) of $\approx 19.47^o$.
 """
 
 # ╔═╡ f10b555a-9f57-4d97-99f0-61da8b88496d
 md"""
-### 3a. _Numerical_ Stationary Phase
+## 3b. *Numerical* Stationary Phase
 
-In practice, we can't _completely_ ignore the other values of $T$, but we _can_ focus our attention in that region. This is surprisingly tricky to do numerically, but in 2024 (**! a modern paper !**) Gibbs & Huybrechs came up with a method for uses Gauss-Legendre near the stationary points and a complex variable integral to account for the small "tail" contributions. 
+In practice, we can't _completely_ ignore the other values of $T$, but we _can_ focus our computational effort in the stationary region. This is surprisingly tricky to do numerically, but in 2024 (**! 137 years after Kelvin !**) Gibbs & Huybrechs came up with a method that uses Gauss-Legendre near the stationary points and a complex variable integral to account for the small "tail" contributions. 
 
 In `NeumannKelvin.jl`, I extend their approach to handle a few complexities of the $W$ function, and it works extremely well! The code blocks below demonstrate the resulting `wavelike` function:
  - It is $O(100)$ times faster than `quadgk` over `x_cases`, with increasing speed-up as $z\rightarrow -0$.
@@ -250,12 +259,15 @@ In `NeumannKelvin.jl`, I extend their approach to handle a few complexities of t
 @time wavelike_cases = [wavelike(x,y,z) for (x,y,z) in x_cases]; # O(100) × speed-up
 
 # ╔═╡ 326a691a-3133-414f-9953-a9c8e65eb959
-@time quadgk(T->Wi(-10.,-1.,-1e-3,T),-Inf,Inf); # a single challenging case!
+# a single challenging case take quadgk 6ms (on my laptop)
+@time quadgk(T->Wi(-10.,-1.,-1e-3,T),-Inf,Inf); 
 
 # ╔═╡ 8f72eae3-4589-418a-8049-318d5b671862
+# but wavelike can do this case >1000 times in 6ms!
 @time for _ in 1:1000; wavelike(-10.,-1.,-1e-3); end # ~1000 × speed-up
 
 # ╔═╡ 7ea6293c-00f1-4594-80a3-12d0a427b3b3
+#quadgk _cannot_ handle z=0, but wavelike does it no slower than before
 @time for _ in 1:1000; wavelike(-10.,-1.,-0.); end # infinite speed up!!
 
 # ╔═╡ b487033f-cbc1-4dee-8a10-5f1637c775f0
@@ -266,9 +278,9 @@ md"""
 ## Putting it together
 
 That was certainly a lot of work, but now we can easily create the free surface potential plot at the top of the notebook. 
- - For $\vec\xi=[\xi,0,0]$ & $\vec a=[0,0,z]$ we have $\vec x = \left[\frac{\xi g}{U^2},0,\frac{zg}{U^2}\right]$
+ - For $\vec\xi=[\xi,\eta,0]$,  $\vec a=[0,0,z]$ we have $\vec x = \left[\frac{\xi g}{U^2},\frac{\eta g}{U^2},\frac{zg}{U^2}\right]$
  - The source & sink cancel, so the potential is simply `nearfield(`$\vec x$`)+wavelike(`$\vec x$`)`
- - The free surface elevation is $\frac{\zeta g}{U^2} = \frac{\partial\phi}{\partial x}$ from the free surface boundary condition
+ - The free surface elevation is $\zeta = \frac U g \frac{\partial\phi}{\partial x}$ from the free surface boundary condition
 
 Again, you can switch over to only use a 15 point Gauss quarature for the integration to see the importance of our improved integration methods.
 """
@@ -276,9 +288,9 @@ Again, you can switch over to only use a 15 point Gauss quarature for the integr
 # ╔═╡ fa8fc9ab-28a1-4480-b8b7-2c9c22f0325f
 begin
 	check = @bind real_only CheckBox(default=false)
-	Fns = @bind Fn Slider(2. .^(-2:1),default=1,show_value=true)
-	zs3 = @bind z Slider([-1,-0.1,-0.01,-0.001],default=-0.1,show_value=true)
-	md"""Only use 15-point quadratures $check,  U/√g = $Fns,  z $zs3"""
+	ℓs = @bind ℓ Slider(2. .^(-2:0),default=1,show_value=true)
+	zs3 = @bind z Slider([-1,-0.1,-0.01],default=-0.1,show_value=true)
+	md"""Only use 15-point quadratures $check,  U²/g = $ℓs,  z $zs3"""
 end
 
 # ╔═╡ c72cb1e2-42a9-4d4d-82ab-7a608d916b30
@@ -286,25 +298,57 @@ md"""Only use 15-point quadratures $check"""
 
 # ╔═╡ 6c4464ae-baa6-4dbf-8619-556551da306f
 begin
-	function ϕ(xi::T) where T 
-		x = (xi/Fn^2,T(0.),T(z/Fn^2))
+	function ϕ(xi::T,eta,zeta) where T 
+		x = (xi/ℓ,abs(T(eta/ℓ)),T(zeta/ℓ))
 		!real_only && return nearfield(x...)+wavelike(x...)
 		2/pi*quadgk(T->Ni(x...,T),-1,1,maxevals=15)[1] + 4quadgk(T->Wi(x...,T),-Inf,Inf,maxevals=15)[1]
 	end
 	using ForwardDiff:derivative
 	xi_rng = range(-30,10,1000)
-	ϕ_rng = ϕ.(xi_rng)./Fn^2
-	ζ_rng = derivative.(ϕ,xi_rng)
+	ϕ_rng = ϕ.(xi_rng,0.,z)./ℓ
+	ζ_rng = derivative.(x->ϕ(x,0.,z),xi_rng)
 	flow = let
 		plt1 = plot(xi_rng,ϕ_rng,label=nothing,xlabel="",ylabel="ϕ",
-			title="source at a=[0,0,$z], U/√g=$Fn")
-		plt2 = plot(xi_rng,ζ_rng,label=nothing,title="",xlabel="ξ",ylabel="ζ")
+			title="free surface centerline: z=$z, U²/g=$ℓ")
+		plt2 = plot(xi_rng,ζ_rng,label=nothing,title="",xlabel="ξ",ylabel="ζg/U")
 		plot(plt1,plt2,layout=(2,1))
 	end
 end
 
 # ╔═╡ f16f1fc5-e08b-4ebb-ada9-149edef67872
 flow
+
+# ╔═╡ 583cb23d-3ccf-49bd-9959-109711ce07c7
+let
+	h = 0.1
+	xg=-16:h:2; yg=-6:h:6
+	zg = [ϕ(x/ℓ,y/ℓ,z/ℓ) for y in yg, x in xg]
+	mx = max(1,min(20,maximum(abs,zg))); clamp!(zg,-mx,mx)
+	contourf(xg,yg,zg;aspect_ratio=:equal,colormap=:balance,
+			 clims=(-mx,mx),levels=12,line=0)
+	plot!([0,-16],[0,16/√8],c=:black,ls=:dot,label=nothing)
+	plot!([0,-16],[0,-16/√8],c=:black,ls=:dot,label=nothing)
+	plot!(title="free surface plane")
+end
+
+# ╔═╡ 7227d01f-67c4-4d6d-80bf-5cab2e066b85
+md"""
+I've added the $\frac 1 {\sqrt 8}$ Kelvin wake angle lines to the free surface plane plot above and that checks out!
+
+### Activity
+ - How should the Froude length U²/g relate to the wavelngth? Do the results match the theory when you change U²/g?
+ - What happens when you change z? Point out an obvious issue that will make it difficult to use the Kelvin potential in a panel method.
+
+## Summary
+
+In this notebook we developed methods to evaluate the Kelvin Green's function for free surface flows. In the process we learned three types of algorithms:
+
+1. Recursive methods like `quadgk` are the backbone of modern general-purpose software. FFTs, ODE integration methods, and many many more. 
+1. Machine learning methods _might_ accelerate your predictions, you need to pick the right problem, get lot of data, and be careful about generalization error.
+2. Semi-analytic methods are a silver bullet for really hard problems, but take can years (or centuries) to develop.
+
+In the end, we've come up with a very fast, accurate and robut way to evaluate the kelvin potential. This is probably the fastest such code in the world and in the next notebook we'll test it out in the solver.
+"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1965,10 +2009,10 @@ version = "1.13.0+0"
 # ╟─f16f1fc5-e08b-4ebb-ada9-149edef67872
 # ╟─c72cb1e2-42a9-4d4d-82ab-7a608d916b30
 # ╟─ebe67ec1-6b3c-4656-9614-840d17d457f8
-# ╟─425be609-a19d-448d-a86c-c370fd4a0227
+# ╠═0a16323f-657c-4886-864d-bfdae1f15bc9
 # ╟─a27b8f0a-dc4a-452e-88ed-8fcc0b8a1a9a
 # ╟─6a32d7b0-b49f-4157-92f7-3d487196cf46
-# ╟─03b7fe33-35ee-4add-8d7a-3bcdc8c4b6c4
+# ╟─425be609-a19d-448d-a86c-c370fd4a0227
 # ╟─f4588bb2-8605-42b7-b149-7f9f33044f6b
 # ╠═58f96f50-045c-4549-90c5-5d594d7218f4
 # ╟─23ab0585-99db-4168-9dc4-7a2060c6ee1e
@@ -1982,6 +2026,8 @@ version = "1.13.0+0"
 # ╠═2d010248-9201-46bd-a3bb-ca15025a549b
 # ╠═b53ac388-3c7b-4753-9b5c-5882080dff4f
 # ╟─0a9c0799-ad81-400e-adb1-9e46d1a1328c
+# ╟─21db612f-8023-4130-85f1-e6829d7ecec7
+# ╟─bea64deb-646f-4b22-82fa-7abe7c64d15c
 # ╟─7898c3e1-6224-4200-9bae-e1d68627c6ab
 # ╟─f10b555a-9f57-4d97-99f0-61da8b88496d
 # ╠═23a7e728-7c0f-413e-ac85-0fbbdb5ab67a
@@ -1991,8 +2037,10 @@ version = "1.13.0+0"
 # ╠═7ea6293c-00f1-4594-80a3-12d0a427b3b3
 # ╠═b487033f-cbc1-4dee-8a10-5f1637c775f0
 # ╟─4374a000-69f3-4c8f-a1a6-bfb9bbc7f3b1
-# ╟─fa8fc9ab-28a1-4480-b8b7-2c9c22f0325f
 # ╟─6c4464ae-baa6-4dbf-8619-556551da306f
+# ╟─fa8fc9ab-28a1-4480-b8b7-2c9c22f0325f
+# ╟─583cb23d-3ccf-49bd-9959-109711ce07c7
+# ╟─7227d01f-67c4-4d6d-80bf-5cab2e066b85
 # ╟─cfc5555e-0f24-404f-8045-7136c435c158
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
