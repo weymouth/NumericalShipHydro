@@ -77,7 +77,7 @@ md"""
 
 The examples above have very clean input files, but it's much more typical for a file to require some processing.
 
-If you have a bad STL mesh, you will need to find/export another one or fix it using a dedicated meshing library. Finding the few triangles with flipped normals or overlapping faces in a 20k-face mesh in a notebook is not fun.  **You will also need to generate multiple versions of any STL-defined geometry so you can do a convergence study on your flow quantities of interest.**
+If you have a bad STL mesh, you will need to find/export another one or fix it using a dedicated meshing library. Finding the few triangles with flipped normals or overlapping faces in a 20k-face mesh in a notebook is not fun.  **You will also need to generate multiple versions of any STL-defined geometry so you can do a convergence study on your predictions.**
 
 If you have a reasonably good NURBS file, you can do the cleanup in a notebook. In that case, you could use one geometry file to predict across a range of geometric conditions, like sinkage and trim tests.
 

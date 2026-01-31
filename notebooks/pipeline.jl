@@ -31,7 +31,7 @@ In the last notebook, we wrote a panel method in only 4 lines of code. But we sa
 
 **Step 3** is harder, mostly because there are many potential things we might want to measure. But once you have carefully developed and validated a measurement function, you can use it forever!
 
-**Step 1** is typically the hardest because every problem is different. Trying to improve our panelization was tricky even for the simple sphere example, and dealing with more general problems like ship hulls and free surfaces is exponentially more complex.
+**Step 1** is typically the hardest because every problem is different. A naive panelization led to prediction errors for a simple sphere! Dealing with more general geometries like ship hulls is exponentially more complex.
 
 We will use functions in the NeumannKelvin package to *simplify the simulation prediction pipeline*, particularly the setup. But we need to be careful to avoid the most critical error of all:
 
@@ -41,7 +41,7 @@ We will use functions in the NeumannKelvin package to *simplify the simulation p
 
 ## 1. Set-up: Automated panelization and visualization
 
-The code below uses two new functions to help with step 1: `panelize` and `viz`.
+NeumannKelvin has two nice functions to help with step 1; `panelize` and `viz`. Let's revisit the simple sphere using these functions:
 """
 
 # ╔═╡ dfa6d033-9253-47d3-85ad-9f13b4c4d5d3
@@ -54,7 +54,7 @@ end
 let # this defines a little local environment to play in
 	h = 1/4
 	panels = sphere(h; devlimit=0.05, flip=false, transpose=false) # what are these?
-	viz(panels,colorrange=(0,1.1h^2),label="dA",vscale=3) # what's this?
+	viz(panels,colorrange=(0,h^2),label="dA",vscale=3) # what's this?
 end
 
 # ╔═╡ 62fec8d1-e0ca-447e-ad55-a7a53d0a6528
@@ -62,7 +62,7 @@ md"""
 
 ### Activity
  - Read the documentation for `panelize` and `viz` with a few other students. Each group needs to ask me a question after doing the following parts...
- - Change the `devlimit` parameter and pay attention to changes in the panelization. Can you explain what's going on?
+ - Change `h` and the `devlimit` parameter and pay attention to changes in the panelization. Can you explain what's going on?
  - Change the `flip` and `transpose` flags. This will break the notebook(!), but can you imagine when you might need these options?
 
 ---

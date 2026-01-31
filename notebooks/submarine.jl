@@ -76,13 +76,13 @@ where `S` defaults to the body's surface area. See the docs.
 
 ## FSPanelSystem
 
-For our first free-surface simulation, we can define a `FSPanelSystem` with panels on both `body` and `freesurf`. We also **must** define the Froude length `ℓ ≡ U²/g` to apply the FSBC.
+For our first free-surface simulation, we can define a `FSPanelSystem` with panels on both `body` and `freesurf`, and the Froude length `ℓ ≡ U²/g` for the FSBC and use GMRES to solve.
 
+> The `directsolve!` only applies the Neumann BC on `body`, while `gmressolve!` can apply both the Neumann BC on `body` and the FSBC on `freesurf`.
 """
 
 # ╔═╡ e096e3c7-85ad-49b2-b640-7aea706ca07a
-begin # set-up
-
+begin
 	# Froude-length and freesurf spacing
 	ℓ = 1/4; hfs = 0.3ℓ
 
@@ -91,6 +91,9 @@ begin # set-up
 
 	# FreeSurfacePanelSystem
 	FSsys = FSPanelSystem(body,freesurf;ℓ,sym_axes=2,θ²=16)
+
+	# solve using GMRES
+	gmressolve!(FSsys,itmax=150) # don't let it run forever!
 end
 
 # ╔═╡ c5f6043c-9c38-4e42-a680-10980455421d
@@ -98,16 +101,7 @@ md"""
 There are a few important things to notice in that code and the result:
 - `freesurf`: The free-surface mesh is a `Matrix{Panels}`, not a `Table`! This is because we use finite differences for the FSBC, and we need to know which panels are one or two steps forward and backward in `x`. `FSPanelSystem` is really picky about this — read the docs.
 - `PanelTree`: Both `body` and `freesurf` are wrapped in a `PanelTree` by default because the free-surface meshes are unavoidably large. You can disable this using `wrap=identity` or adjust the Barnes–Hut cutoff using the `θ²` keyword argument.
-
-Now let's solve. We **must** use `gmressolve!` to apply the FSBC.
-"""
-
-# ╔═╡ 2ede227b-1d1f-49a6-8311-ea08aa30ee78
-gmressolve!(FSsys,itmax=150) # don't let it run forever!
-
-# ╔═╡ 437aad10-d96b-421c-86e6-005fc48a3c6d
-md"""
-When we used `gmressolve!(sys::BodyPanelSystem)` in a previous notebook it took around 3-6 iterations to converge. As you can see, we're now taking O(100) iterations - _and this makes sense_. The exact free surface solution is made up of an infinite number of waves. GMRES is (very efficiently) sorting through these components and assembling the solution, but this takes a while.
+ - `niter`: When we used `gmressolve!(sys::BodyPanelSystem)` in a previous notebook it took around 3-6 iterations to converge. As you can see, we're now taking O(100) iterations - _and this makes sense_. The exact free surface solution is made up of an infinite number of waves. GMRES is (very efficiently) assembling the solution, but this takes a while.
 
 Time to measure!
 """
@@ -167,12 +161,12 @@ Just like the sphere case, we also need to check our method's numerical converge
 """
 
 # ╔═╡ 3b2d70f4-3e7e-43f8-958a-39bf348b8b00
-dataN = map(4:11) do i
-	body = submarine(√0.5^i)
-	sys = NKPanelSystem(body;ℓ,sym_axes=2)
-	directsolve!(sys,verbose=false)
-	f = steadyforce(sys)
-	(N=length(body),drag=-f[1],lift=f[3])
+dataN = map(logrange(0.25,0.025,8)) do h
+	body = submarine(h)                     # new geometry
+	sys = NKPanelSystem(body;ℓ,sym_axes=2)  # constant ℓ 
+	directsolve!(sys,verbose=false)         # solve
+	f = steadyforce(sys)                    # measure
+	(N=length(body),drag=-f[1],lift=f[3])   # save
 end |>Table;
 
 # ╔═╡ e08a437c-b264-4c00-b9fc-1fc00de66317
@@ -197,10 +191,10 @@ Finally, let's check how our wave drag force depends on Froude number.
 
 # ╔═╡ dc6bcf00-8191-4168-82de-1cd2d8b4666b
 dataFn = map(0.3:0.025:0.8) do Fn
-	sys = NKPanelSystem(body,ℓ=Fn^2,sym_axes=2)
-	directsolve!(sys,verbose=false)
-	drag = -steadyforce(sys,S=1)[1] # scale by S=L²
-	(;Fn,drag)
+	sys = NKPanelSystem(body,ℓ=Fn^2,sym_axes=2) # constant geom, new ℓ
+	directsolve!(sys,verbose=false)             # solve
+	drag = -steadyforce(sys,S=1)[1]             # measure force, scaled by S=L²
+	(;Fn,drag)                                  # save
 end|> Table;
 
 # ╔═╡ ab77f9cd-92e5-47da-b8f8-9ac6743134cb
@@ -2201,7 +2195,7 @@ version = "4.1.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═be6dec6f-2a55-4f8c-8852-52830656c062
+# ╟─be6dec6f-2a55-4f8c-8852-52830656c062
 # ╠═6aa38485-f860-4834-ac8b-7a7761fa26e0
 # ╠═7c9265d4-0bca-4f50-af24-b4c49fab0280
 # ╠═e3bb8c3e-af31-491a-a4de-03c374bd79d5
@@ -2213,8 +2207,6 @@ version = "4.1.0+0"
 # ╟─f2dbcfd1-dcd4-44d4-86c7-92c83cac36d0
 # ╠═e096e3c7-85ad-49b2-b640-7aea706ca07a
 # ╟─c5f6043c-9c38-4e42-a680-10980455421d
-# ╠═2ede227b-1d1f-49a6-8311-ea08aa30ee78
-# ╟─437aad10-d96b-421c-86e6-005fc48a3c6d
 # ╠═d3b20cf5-5b7c-42f6-8fad-ed1dd64cef45
 # ╟─c04b8e03-221e-4d89-829d-9de5926ce886
 # ╠═e6ee35ea-b0e0-47ba-abbf-6b32e3e7faf1

@@ -142,7 +142,7 @@ G.(x_vector) # dot syntax
 md"""
 ## Numerical quadrature
 
-Consider the integral
+Let's begin our analysis by considering the integral
 
 $F = \int_{-h/2}^{h/2} f(x) dx$
 
@@ -177,11 +177,11 @@ begin # make the plot
 	scatter(pnts,zero,shape=:vline,c=:black,label="panels",xlabel="x")
 
 	exact_vals = [exact(a[i],b[i]) for i in 1:N]
-	# exact_vals = map(exact,a,b) # could also be used
+	# exact_vals = map(exact,a,b) # could also use map
 	scatter!(m,exact_vals,label="Exact integral")
 
 	midpoint_vals = [midpoint(G,a[i],b[i]) for i in 1:N]
-	# midpoint_vals = midpoint.(G,a,b) # could also be used
+	# midpoint_vals = midpoint.(G,a,b) # could also use dot syntax
 	scatter!(m,midpoint_vals,alpha=0.5,label="Midpoint rule")
 end
 
@@ -275,7 +275,7 @@ sum(w*test_cubic(x) for (x,w) in zip(xgl,wgl))
 
 # ╔═╡ a397cafe-3e42-41d8-8576-9d304c7dbee6
 md"""
-I prefer the `sum` notation, and using `zip` keeps the final function very clean.
+I prefer the `sum` notation, and using `zip` keeps the final function very readable.
 
 > I like to think of `zip` as "zipping together" two arrays into one. But remember that you can look up functions like `sum` and `zip` in the Live docs for more examples.
 
@@ -1710,7 +1710,7 @@ version = "1.4.1+2"
 # ╠═e1319af7-e552-48d7-bd91-4ea65c5adb17
 # ╟─c40af00e-43e9-448e-b45c-ffc94c8d09f8
 # ╠═9d9c5f07-0db9-4547-a817-db55211d729f
-# ╠═d377f6bd-c169-45b0-b356-7eb69712e9e9
+# ╟─d377f6bd-c169-45b0-b356-7eb69712e9e9
 # ╠═48490cb3-c252-4165-b7de-88c2077160bb
 # ╠═0192f438-5b07-4bcc-863c-0580e0868a77
 # ╠═966fc702-dcff-4568-8b0b-f8e8eb750150
