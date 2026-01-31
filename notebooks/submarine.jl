@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 6aa38485-f860-4834-ac8b-7a7761fa26e0
-using NeumannKelvin ,WGLMakie
+using NeumannKelvin, WGLMakie
 
 # ╔═╡ be6dec6f-2a55-4f8c-8852-52830656c062
 md"""
@@ -18,9 +18,9 @@ We now have three methods for linear free surface simulations:
 1. FS panel system: source Green's function with the Neumann-BC applied to the body panels and the linear FSBC applied to the free surface mesh.
 2. NK panel system: Kelvin Green's function and Neumann-BC applied to body panels.
 
-In this notebook we'll compare all three approaches, using a submerged spheroid as a validation case.
+We'll compare all three approaches in this notebook, using a submerged spheroid as a validation case.
 
-> Multiple previous studies have used this geometry. Havelock and Farell have made analytic studies, while Baar & Price and many other have used panel methods. We'll compare to these references below.
+> Multiple previous studies have used this geometry. Havelock and Farell conducted analytic studies, while Baar and Price and many others used panel methods. We'll compare to these references below.
 
 """
 
@@ -46,7 +46,7 @@ We've made a half-body to exploit the y-symmetry. The area drops to 0.2h² at th
 md"""
 ## Double-body prediction
 
-Lets start by looking at the double body prediction using `BodyPanelSystem`. We've done this before, so I'll do the whole pipeline at once:
+Let's start by looking at the double-body prediction using `BodyPanelSystem`. We've done this before, so I'll do the whole pipeline at once:
 """
 
 # ╔═╡ 345b1774-b323-4b48-99d5-2911f25acdde
@@ -61,7 +61,7 @@ steadyforce(sys) # dynamic force coefficient
 # ╔═╡ f2dbcfd1-dcd4-44d4-86c7-92c83cac36d0
 md"""
 
-the function `steadyforce` calculates the cₚ integral:
+The function `steadyforce` calculates the cₚ integral:
 
 $\vec C_F = \frac{\vec F}{\tfrac12 \rho U^2 S} = -\oint c_p \hat n \ \text{d}a / S$
 
@@ -69,7 +69,7 @@ where `S` defaults to the body's surface area. See the docs.
 
 ### Activity
 
- - Is the cₚ distribution symmetric in x? Does that explain why Fx=0?
+ - Is the cₚ distribution symmetric in x? Does that explain why Fx = 0?
  - Is the distribution symmetric in z? Does that explain the small, but nonzero Fz?
  - Why is Fy ≠ 0? Do we have a bug?
 
@@ -84,7 +84,7 @@ For our first free-surface simulation, we can define a `FSPanelSystem` with pane
 begin # set-up
 
 	# Froude-length and freesurf spacing
-	ℓ = 1/4; hfs = 0.3ℓ 
+	ℓ = 1/4; hfs = 0.3ℓ
 
 	# Make the free-surface mesh using y-symmetry and resolving ℓ
 	freesurf = measure.((u,v)->SA[u,-v,0],2:-hfs:-4,(-2:hfs:-hfs/2)',hfs,hfs)
@@ -96,10 +96,10 @@ end
 # ╔═╡ c5f6043c-9c38-4e42-a680-10980455421d
 md"""
 There are a few important things to notice in that code and the result:
- - `freesurf`: The free-surface mesh is a `Matrix{Panels}` not a `Table`! This is because we use finite differences for the FSBC and we need to know which panels are one or two steps forwards and backwards in `x`. `FSPanelSystem` is really picky about this - read the docs. 
- - `PanelTree`: Both `body` and `freesurf` are wrapped in a `PanelTree` by default because the free-surface meshes are unavoidably large. You can disable this using `wrap=identity` or adjust the Barnes-Hut cutoff using the `θ²` keyword argument. 
+- `freesurf`: The free-surface mesh is a `Matrix{Panels}`, not a `Table`! This is because we use finite differences for the FSBC, and we need to know which panels are one or two steps forward and backward in `x`. `FSPanelSystem` is really picky about this — read the docs.
+- `PanelTree`: Both `body` and `freesurf` are wrapped in a `PanelTree` by default because the free-surface meshes are unavoidably large. You can disable this using `wrap=identity` or adjust the Barnes–Hut cutoff using the `θ²` keyword argument.
 
-Now let's solve. We **must** use `gmressolve!` to apply the FSBC. 
+Now let's solve. We **must** use `gmressolve!` to apply the FSBC.
 """
 
 # ╔═╡ 2ede227b-1d1f-49a6-8311-ea08aa30ee78
@@ -117,7 +117,7 @@ viz(FSsys)
 
 # ╔═╡ c04b8e03-221e-4d89-829d-9de5926ce886
 md"""
-I've set up the default GLMakie plot to display the wave elevation on `freesurf` (and u,cₚ on`body` as before). We can also ignore `freesurf` to zoom in on the body only.
+I've set up the default GLMakie plot to display the wave elevation on `freesurf` (and `u`, `cₚ` on `body` as before). We can also ignore `freesurf` to zoom in on the body only.
 """
 
 # ╔═╡ e6ee35ea-b0e0-47ba-abbf-6b32e3e7faf1
@@ -129,13 +129,13 @@ steadyforce(FSsys)
 # ╔═╡ b1856122-babd-4ff6-bcf5-d1638a1f212d
 md"""
 ### Activity
-- The net force in x is the **wavemaking** drag. Does the cₚ plot make it clear why the force is nonzero in x? 
-- Scroll back up to those waves. Visually check the Kelvin angle and the wavelength for `ℓ=1/4`. Does the values look ok?
+- The net force in x is the **wavemaking** drag. Does the cₚ plot make it clear why the force is nonzero in x?
+- Scroll back up to those waves. Visually check the Kelvin angle and the wavelength for `ℓ = 1/4`. Do the values look OK?
 - Think big picture for a minute. We measured the wave drag by integrating the pressure on the body. Could we have done this another way?
 
 ## NKPanelSystem
 
-Finally, we can try the Neumann-Kelvin panel system. In this case, the method is _exactly_ the same as in the second notebook and a `BodyPanelSystem` except we use the Kelvin Green's function we developed in the last notebook
+Finally, we can try the Neumann–Kelvin panel system. In this case, the method is _exactly_ the same as in the second notebook and in a `BodyPanelSystem`, except that we use the Kelvin Green's function we developed in the last notebook.
 
 Let's see!
 """
@@ -144,7 +144,7 @@ Let's see!
 NKsys = NKPanelSystem(body;ℓ,sym_axes=2) |> directsolve!
 
 # ╔═╡ 6cdb8bee-2c2d-4109-8df8-a08525bfbfaf
-md"> Note that you can't use `PanelTree` for NKPanelSystems. The wavelike Green's function doesn't decay homogeneously, so a simple distance-based cut-off be remotely accurate. That's another reason we spent so much effort optimizing in the previous notebook."
+md"> Note that you can't use `PanelTree` for NKPanelSystems. The wavelike Green's function doesn't decay homogeneously, so a simple distance-based cutoff won't be remotely accurate. That's another reason we spent so much effort optimizing in the previous notebook."
 
 # ╔═╡ fa52dcac-f1f0-453a-9b8c-5c89646a2022
 viz(NKsys)
@@ -163,7 +163,7 @@ That was... easy! Basically no harder than dealing with a `BodyPanelSystem`.
 
 ## Convergence and Validation
 
-Just like the sphere case, we also need to check our method's numerical convergence and compare to a known solution. In this case, Farell determined an exact solution to the _linear_ potential flow over a submerged spheroid. 
+Just like the sphere case, we also need to check our method's numerical convergence and compare to a known solution. In this case, Farell determined an exact solution to the _linear_ potential flow over a submerged spheroid.
 """
 
 # ╔═╡ 3b2d70f4-3e7e-43f8-958a-39bf348b8b00
@@ -180,11 +180,11 @@ let
 	fig = Figure()
 	ax = Axis(fig[1,1],xscale = log10,xlabel="N", ylabel="Force coefficients",
 			xticks=([10, 30, 100, 300]),limits=(nothing,(0,0.02)))
-	scatter!(ax,dataN.N,-dataN.drag,label="drag")
-	scatter!(ax,dataN.N,-dataN.lift,label="lift")
+	scatter!(ax,dataN.N,dataN.drag,label="drag")
+	scatter!(ax,dataN.N,dataN.lift,label="lift")
 	axislegend(ax)
 	fig
-end	
+end
 
 # ╔═╡ cb56800d-5151-4143-9759-6e510089e4db
 md"""
@@ -192,7 +192,7 @@ Our forces depend strongly on the panel size. But the results have pretty much c
 
 ---
 
-Finally, lets check how our wave drag force depends on Froude number.
+Finally, let's check how our wave drag force depends on Froude number.
 """
 
 # ╔═╡ dc6bcf00-8191-4168-82de-1cd2d8b4666b
@@ -208,17 +208,17 @@ let
 	fig = Figure()
 	ax = Axis(fig[1,1],xlabel="Fn", ylabel="10³ Cw",
 			  limits=(nothing,(0,3.5)))
-	plot!(ax,dataFn.Fn,-1000*dataFn.drag)
+	plot!(ax,dataFn.Fn,1000*dataFn.drag)
 	fig
 end
 
 # ╔═╡ 8d544622-8eb7-4dc5-870e-39ec21f26c70
 md"""
 
-Here is a plot from Baar and Price 1986, for (coincidentally) the same Z/L and r/L ratio. Note that they scaled the drag integral by $\rho U^2 L^2$ instead of $\frac 12 \rho U^2S$ so I had to play with our scaling to compare them.
+Here is a plot from Baar and Price (1986), for (coincidentally) the same Z/L and r/L ratios. Note that they scaled the drag integral by $\rho U^2 L^2$ instead of $\frac 12 \rho U^2 S$, so I adjusted our scaling to compare them.
 ![](https://raw.githubusercontent.com/weymouth/NumericalShipHydro/9349f0512fe3ee3a1164d8e0ef6e8fda71f3899d/Baar_1982_prolate_spheroid.png)
 
-As you can see, our results match the analytic solution and previous Neumann-Kelvin simulation results extremely well! 
+As you can see, our results match the analytic solution and previous Neumann-Kelvin simulation results extremely well!
 
 ### Activity
  - Have we validated the linear free surface code?
@@ -232,7 +232,7 @@ NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
 WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
 
 [compat]
-NeumannKelvin = "~0.8.2"
+NeumannKelvin = "~0.9.0"
 WGLMakie = "~0.13.8"
 """
 
@@ -240,9 +240,9 @@ WGLMakie = "~0.13.8"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.2"
+julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "b8cc4f545fe23b9e5b4ee97503293c70e36cd031"
+project_hash = "f7ea2d87c3f5f766ba60e15ff1813690dca8aebc"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1090,10 +1090,16 @@ uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
 version = "1.7.1"
 
 [[deps.JSON]]
-deps = ["Dates", "Mmap", "Parsers", "Unicode"]
-git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
+deps = ["Dates", "Logging", "Parsers", "PrecompileTools", "StructUtils", "UUIDs", "Unicode"]
+git-tree-sha1 = "b3ad4a0255688dcb895a52fafbaae3023b588a90"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-version = "0.21.4"
+version = "1.4.0"
+
+    [deps.JSON.extensions]
+    JSONArrowExt = ["ArrowTypes"]
+
+    [deps.JSON.weakdeps]
+    ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
 
 [[deps.JpegTurbo]]
 deps = ["CEnum", "FileIO", "ImageCore", "JpegTurbo_jll", "TOML"]
@@ -1391,21 +1397,19 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["AcceleratedKernels", "DataInterpolations", "FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "HCubature", "ImplicitBVH", "Krylov", "LinearAlgebra", "LinearOperators", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "TupleTools", "TypedTables"]
-git-tree-sha1 = "80c5183ab5e05d542fb3337090583a76072074af"
+git-tree-sha1 = "72f873533e5575a637422eec5a255d60d2786e0e"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.8.2"
+version = "0.9.0"
 
     [deps.NeumannKelvin.extensions]
     NeumannKelvinGeometryBasicsExt = "GeometryBasics"
     NeumannKelvinMakieExt = "Makie"
     NeumannKelvinNURBSExt = "NURBS"
-    NeumannKelvinPlotsExt = "Plots"
 
     [deps.NeumannKelvin.weakdeps]
     GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
     Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
     NURBS = "dde13934-061e-461b-aa91-2c0fad390a0d"
-    Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 
 [[deps.Observables]]
 git-tree-sha1 = "7438a59546cf62428fc9d1bc94729146d37a7225"
@@ -1453,7 +1457,7 @@ version = "3.4.4+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+2"
+version = "0.8.5+0"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "NetworkOptions", "OpenSSL_jll", "Sockets"]
@@ -1871,6 +1875,20 @@ weakdeps = ["Adapt", "GPUArraysCore", "KernelAbstractions", "LinearAlgebra", "Sp
     StructArraysLinearAlgebraExt = "LinearAlgebra"
     StructArraysSparseArraysExt = "SparseArrays"
     StructArraysStaticArraysExt = "StaticArrays"
+
+[[deps.StructUtils]]
+deps = ["Dates", "UUIDs"]
+git-tree-sha1 = "9297459be9e338e546f5c4bedb59b3b5674da7f1"
+uuid = "ec057cc2-7a8d-4b58-b3b3-92acb9f63b42"
+version = "2.6.2"
+
+    [deps.StructUtils.extensions]
+    StructUtilsMeasurementsExt = ["Measurements"]
+    StructUtilsTablesExt = ["Tables"]
+
+    [deps.StructUtils.weakdeps]
+    Measurements = "eff96d63-e80a-5855-80a2-b1b0885c5ab7"
+    Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 
 [[deps.StyledStrings]]
 uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"

@@ -13,94 +13,101 @@ begin
 	ϕ = ∫G # panel potential function
 end
 
+# ╔═╡ d8fdb518-b039-4dae-87d2-f471100cda43
+using NeumannKelvin:panelize
+
 # ╔═╡ 89ec7c70-c0cf-4bef-8e32-9dc4b2df91f4
 md"""
-# Numerical Panel Methods 🚢 
+# Numerical Panel Methods 🚢
 
 In the first notebook we studied
 
  > 1. _How can we calculate the influence of each panel?_ **Gaussian quadratures.**
  > 2. _How should we compute the derivatives of our functions?_ **Automatic differentiation.**
 
-My Julia package `NeumannKelvin.jl` implements 3D panel potential using Gauss quadratures. Check the documentation for `∫G`, or [check the code](https://github.com/weymouth/NeumannKelvin.jl/blob/dcc8611a04beade8923ca9b45765da577cf2f5ad/src/panel_method.jl#L41). 
+My Julia package `NeumannKelvin.jl` implements 3D panel potential using Gauss quadratures. Check the documentation for `∫G`, or [check the code](https://github.com/weymouth/NeumannKelvin.jl/blob/69d08ee6ab1865f9453687ff6ca621d653b5f268/src/panel_method.jl#L15).
 
-In this notebook we will actually start solving potential flow problems with panel methods addressing two more questions: 
+In this notebook we will actually start solving potential flow problems with panel methods addressing two more questions:
 
  3. _How can we determine the correct strength for each panel?_ **Set-up and solve a linear system.**
- 4. _How should we determine if a method is working?_ **Convergence and validation tests.** 
+ 4. _How should we determine if a method is working?_ **Convergence and validation tests.**
 """
 
 # ╔═╡ a899175c-85fd-46ed-bd3a-b30c1e97c9d6
 md"""
 ## Sphere geometry
 
-Our example problem will be the potential flow around a sphere. The `sphere` function below creates a vector of panels using the [parametric equation](https://en.wikipedia.org/wiki/Sphere#Parametric) 
+Our example problem will be the potential flow around a sphere. The `sphere` function below creates a vector of panels using the [parametric equation](https://en.wikipedia.org/wiki/Sphere#Parametric)
 
-$[S_x,S_y,S_z] = R[\cos(θ₂)\sin(θ₁),\sin(θ₂)\sin(θ₁),\cos(θ₁)]$
+$S(θ₁, θ₂) = R[\cos(θ₂)\sin(θ₁), \sin(θ₂)\sin(θ₁), \cos(θ₁)]$
 
-where `θ₁,θ₂` are the azimuth and polar angles.
+where $\theta_1\in[0,\pi],\ \theta_2∈[0,2\pi]$ are the azimuth and polar angles. We will use this equation and the `NeumannKelvin.measure` function to create a set of panels.
 """
 
 # ╔═╡ 0576ce9d-dd33-4b20-915a-24421037d7c0
 function sphere(h,R=1)
-    S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)] # sphere eq
-    dθ = π/round(π*R/h) # angle step size s.t. dθR ≈ h & 2πR=hN₂
-	θ₁ = dθ/2:dθ:π     # latitude sampling [0,π]
-	θ₂ = dθ/2:dθ:2π    # longitude sampling [0,2π]
-	p = measure.(S,θ₁',θ₂,dθ,dθ) # measure panel properties
-	return Table(p)     # return as a Table
+	# sphere's parametric equation
+    S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)]
+
+	# angle step dθ that evenly divides π and gives dθ*R≈h
+    dθ = π/round(π*R/h)
+
+	# measure the panels over θ₁∈[0,π], θ₂∈[0,2π]
+	panel_matrix = [measure(S,θ₁,θ₂,dθ,dθ) for θ₂ in dθ/2:dθ:2π, θ₁ in dθ/2:dθ:π]
+
+	# return the panels as a Table
+	return Table(panel_matrix)
 end
-
-# ╔═╡ 71df011e-bf21-47c3-85f0-18a9aca54fee
-md"""
-This function is the longest we've made so far (6 lines!) but each line is very simple:
-1. Define the function `S(θ₁,θ₂)`, which looks identical to the equation.
-2. Set the spacing so the panels at the equator are approximately $h \times h$.
-3. Define a uniform sampling from pole-to-pole (latitudes).
-4. Define a uniform sampling around the equator (longitudes).
-5. Measure the panels by calling the function `measure` (defined in `NeumannKelvin.jl`) at each sample point using the transpose (`'`) and broadcast (`.`) notation.
-6. Turn this panel data into a `Table` for pretty printing.
-
-Let's set the panel size to `h=0.5R` and create an array of panels.
-"""
 
 # ╔═╡ ceaa01da-9fba-454f-8a98-a13874f72295
 h,R = 0.5,1.; panels = sphere(h,R); display(panels)
 
+# ╔═╡ 71df011e-bf21-47c3-85f0-18a9aca54fee
+md"""
+This function is the longest we've made so far (4 lines of code!) but each step is simple:
+1. creates a static coordinate vector `SA[x,y,z]` using the parametric equation,
+2. ensures dθxdθ panels evenly cover the sphere,
+3. calls the `measure` function to fill a matrix of panels,
+4. turns this panel data into a `Table` for pretty printing.
+
+> Remember that you can use the "Live docs" to get more information on functions like `SA`, `measure`, and `Table`.
+
+Below, we set the panel size to `h` = $h R and create an array of panels:
+"""
+
 # ╔═╡ 6a2f8a49-6a92-45ac-b538-74f478594033
 md"""
-Each panel has a few properties including the centroid `x`, the normal `n`, and the area `dA`. 
+The function made $(length(panels)) panels, each with properties including the centroid `x`, the normal `n`, and the area `dA`.
 
 Let's start by plotting the centroids.
 """
 
 # ╔═╡ 7d7397ad-8f64-41c8-9742-62921d21be9c
-begin 
+begin
 	# Split the centroids (`panels.x`) into  `x,y,z` vectors for plotting
 	x,y,z = components(panels.x)
-	N = length(panels)
-	plot(x,y,z,legend=false,title="Sphere represented with $N panels")
+	plot(x,y,z,legend=false,title="Sphere represented with $(length(panels)) panels")
 end
 
 # ╔═╡ 44da77a5-8fbc-40f8-a3c5-1006295dd59e
 md"""
-Next let's plot the area $dA_i$ of each panel against $z$ and verify the panels have the correct **total area** $\sum dA=4\pi R^2$.
+Next, let's plot the area $dA$ of each panel against $z$ and verify the panels have the correct **total area** $\sum dA=4\pi R^2$.
 """
 
 # ╔═╡ 75db3a69-1e06-4482-9df0-a77451ceb005
 begin
 	A_error = sum(panels.dA)/4π-1
-	plot(z,panels.dA/h^2,ylim=(0,1.5),xlabel="z",ylabel="dA/h²",legend=false, 
+	plot(z,panels.dA/h^2,ylim=(0,1.5),xlabel="z",ylabel="dA/h²",legend=false,
 		title="Total surface area error: $(round(100A_error,digits=3))%")
 end
 
 # ╔═╡ b40064aa-c1b6-46c6-86fc-87661b3d4d27
 md"""
 #### Activity
- - Why aren't the panel areas uniform? 
- - What would be an advantage of uniformly sized panels, and how could you achieve this?
+ - Change the target spacing `h` and observe what happens to N and the error.
+ - Why aren't the panel areas uniform? Why isn't this ideal?
 
-Note that the number of panels scales with $N \sim R^2/h^2$. Keep this in mind when we discuss how much work it takes to solve for the flow on these panels below.
+Keep these two thoughts in mind for our examples below.
 """
 
 # ╔═╡ 5e3f59e0-92a6-486e-8e62-67d282d5821e
@@ -111,11 +118,11 @@ The potential of the full sphere is simply the superposition of each panel's con
 
 $\Phi(x) = \sum_{i=1}^N q_i \varphi_i(x)$
 
-where $N$ is the number of panels, $q$ is the vector of **unknown** panel strengths and $\varphi_i$ is influence of panel $i$.
+where $N$ is the number of panels, $q$ is the vector of **unknown** panel strengths and $\varphi_i$ is the influence of panel $i$.
 
-Our panel potential $\varphi_i$ uses a source as it's Greens function $G=-1/r$. Since $\nabla^2 G=0$, _any_ vector $q$ will satisfy the laplace equation $\nabla^2\Phi=0$ and be a valid potential flow. This is nice since we can't mess that up, but it means we need an additional equation to determine the _correct_ $q$ for a given geometry and flow condition.
+Our panel potential $\varphi_i$ uses a source as its Green's function $G=-1/r$. Since $\nabla^2 G=0$, _any_ vector $q$ will satisfy the Laplace equation $\nabla^2\Phi=0$ and be a valid potential flow. This is nice since we can't mess that up, but it means we need an additional equation to determine the _correct_ $q$ for a given geometry and flow condition.
 
-> 3. _How can we determine the correct $q$ for each panel?_ 
+> 3. _How can we determine the correct $q$ for each panel?_
 """
 
 # ╔═╡ 1719d47e-5861-481a-8398-84c92e58fbb1
@@ -124,7 +131,7 @@ md"""
 
 The additional equations from our problem description are the boundary conditions. Defining $\vec U$ as the free stream velocity and $\hat n$ as the surface normal, the conditions in an infinite fluid (no free surface) are
  - Flow tangency on the solid body's surface: $U_n+u_n = U_n+\frac{\partial\Phi}{\partial n}=0$
- - No disturbance far from the body: $u(\infty)\rightarrow 0$ 
+ - No disturbance far from the body: $u(\infty)\rightarrow 0$
 
 The second condition is achieved automatically since $u(r) \sim \frac{\partial G}{\partial r} = 1/r^2$. Therefore, the first condition must be used to set $q$.
 
@@ -132,7 +139,7 @@ Substituting the equation for $\Phi$ into the body BC, we have
 
 $\vec U \cdot \hat n + \sum_{j=1}^N \frac{\partial\varphi_j}{\partial n} q_j = 0 \quad\forall\ \vec x \in S$
 
-This boundary condition is linear in $q$ and applies to every point on the body surface $S$. Applying the boundary condition at $N$ specific locations will create $N$ linear equations of the $N$ unknown components of $q$. We will choose the centroid of each panel $p_i$ to apply this condition. Defining 
+This boundary condition is linear in $q$ and applies to every point on the body surface $S$. Applying the boundary condition at $N$ specific locations will create $N$ linear equations of the $N$ unknown components of $q$. We will choose the centroid of each panel $p_i$ to apply this condition. Defining
 
 $a_{ij} = \frac{\partial\varphi_j}{\partial n_i}, \quad b_i = -\vec U \cdot \hat n_i$
 
@@ -140,20 +147,20 @@ as the components of the influence matrix $A$ and the excitation vector $b$, we 
 
 $\sum_{j=1}^N a_{ij} q_j = b_i \quad i=1\ldots N$
 
-or simply $Aq = b$. Meaning once we construct `A,b` we simple use `q = A\b`.
+or simply $Aq = b$. Meaning that once we construct `A` and `b`, we simply use `q = A\b`.
 """
 
 # ╔═╡ e5ce94d5-5fdc-44d3-9009-6455624e9244
 begin
 	# derivative of ϕⱼ in direction pᵢ.n
 	∂ₙϕ(pᵢ,pⱼ) = derivative(t->ϕ(pᵢ.x+t*pᵢ.n,pⱼ),0.)
-	
-	# Construct A using outer product broadcast
-	A = ∂ₙϕ.(panels,panels')
+
+	# Construct A matrix
+	A = [∂ₙϕ(pᵢ,pⱼ) for pᵢ in panels, pⱼ in panels]
 
 	# Construct b = -Uₙ = -U⋅n̂
-	U = SA[-1,0,0]; b = [-U'*n for n in panels.n]
-	
+	U = SA[-1,0,0]; b = [-U ⋅ n for n in panels.n]
+
 	# solve & check that it worked
 	q = A \ b
 	A*q ≈ b && "Solved!"
@@ -161,7 +168,7 @@ end
 
 # ╔═╡ 588973eb-1b69-4a3d-83c0-69ad1a1e6972
 md"""
-This is a complete panel method! In four lines of code!! 
+This is a complete panel method! In four lines of code!!
 
 #### Activity
  - How big is `A`? How does this scale with `h`? Is that a problem?
@@ -181,18 +188,18 @@ md"""
 
 We got the solution to the linear system we created, but was that the right system? And how accurate is the solution?
 
-> 4. _How should we determine if a method is working?_ 
+> 4. _How should we determine if a method is working?_
 
-As a first *sanity check*, we can plot the flow around the sphere. First we need to implement the equation for the total potential $\Phi(x)=\sum q_i φ_i(x)$, and the velocity $\vec u=\vec \nabla\Phi$. Then we can plot the flow at any point. 
+As a first *sanity check*, we can plot the flow around the sphere. First we need to implement the equation for the total potential $\Phi(x)=\sum q_i φ_i(x)$, and the velocity $\vec u=\vec \nabla\Phi$. Then we can plot the flow at any point.
 
-Below I show the flow on the $z=0$ plane, but **Note that the geometry and flow are 3D!**
+Below I show the flow on the $z=0$ slice through the **3D** potential flow solution.
 """
 
 # ╔═╡ d0cc0f66-f871-417a-90d9-8aea80cc3f30
 begin
 	# Functions to compute disturbance potential and velocity
-	Φ(x,q,panels) = q'*[ϕ(x,p) for p in panels]     # sum over all panels
-	∇Φ(x,q,panels) = gradient(x′->Φ(x′,q,panels),x) # AutoDiff
+	Φ(x,q,panels) = q'*[ϕ(x,p) for p in panels]   # sum over all panels
+	∇Φ(x,q,panels) = gradient(ξ->Φ(ξ,q,panels),x) # AutoDiff
 end
 
 # ╔═╡ 1bdfe380-b712-4525-9cdf-4d8cb7e31a24
@@ -224,26 +231,32 @@ where $\alpha$ is the angle of the surface point with respect to the flow direct
 
 # ╔═╡ 708e7a92-95d0-43af-9805-047399dc38a3
 begin
-	# Velocity magnitude |u| on panel centroids
-	abs_u(q,panels) = [norm(∇Φ(x,q,panels)+U) for x in panels.x]
-	
-	# Get the angle and velocity
-	function alpha_velocity(panels)
-		A,b = ∂ₙϕ.(panels,panels'),[-U'*n for n in panels.n]
-		# cos(α) = x/R = n₁
-		return acos.(components(panels.n,1)),abs_u(A\b,panels)
+	function sphere_velocity!(panels,U=SA[-1,0,0])
+		# set-up and solve the system of equations
+		A = [∂ₙϕ(pᵢ,pⱼ) for pᵢ in panels, pⱼ in panels]
+		b = [-U ⋅ n for n in panels.n]
+		q = A\b
+
+		# measure u_mag and α, where cos(α) = U⋅n
+		u_mag = [norm(∇Φ(x,q,panels)+U) for x in panels.x]
+		α = [acos(U⋅n) for n in panels.n]
+
+		# add data to the plot
+		scatter!(α,u_mag,label="$(length(panels)) panels")
 	end
-	
+
+	# start the plot with the exact solution
 	plot(0:0.01:π,x->1.5sin(x),label="exact",xlabel="α",ylabel="uₐ")
-	α,uₐ = alpha_velocity(panels)
-	scatter!(α,uₐ,label="$N panels")
+
+	# run the function to add numerical data to the plot
+	sphere_velocity!(sphere(0.4))
 end
 
 # ╔═╡ 3fcfafb1-e71e-4965-85bc-e2fdaac46778
 md"""
 Not bad, but there is some error.
 
-#### Activity: 
+#### Activity:
  - Discuss: what type of error is this?
  1. System description
  2. Modelling
@@ -257,22 +270,26 @@ Not bad, but there is some error.
 md"""
 ## Added mass
 
-We can further quantify the panel method's error by computing a relevant **integrated quantity**. The added mass matrix is a good choice for potential flows, which is defined as 
+We can further quantify the panel method's error by computing a relevant **integrated quantity**. The added mass matrix $M$ is a good choice for potential flows since the force due to accelerating a body in potential flow is $\vec f = M \vec a$ and it tests all three flow directions. The components of the matrix are defined as
 
-$m_{i,j} = -\rho\oint_S \tilde\Phi_i n_j da$
+$m_{i,j} = -\rho\oint \tilde\Phi_i n_j \text{d}a$
 
-where $\rho$ is the fluid desity and $\tilde\Phi_i$ is the scaled potential resulting from unit velocity in direction $i$. The forces due to an acceleration vector $a$ are then $f = Ma$.
+where $\rho$ is the fluid desity and $\tilde\Phi_i$ is the scaled potential resulting from unit velocity in direction $i$.
 
-The analytic solution for a sphere is $\frac 23 \rho \pi R^3$ on the diagonal and zero for the off diagonals. How does our numerical method perform?
+The analytic solution for a sphere is $\frac 12 ρV = \frac 23 \rho \pi R^3$ on the diagonal and zero for the off diagonals. How does our numerical method perform?
 """
 
 # ╔═╡ 00965cd1-b233-42f7-8a6d-1688175cac1e
 begin
 	function addedmass(panels;ρ=1)
-	    A = ∂ₙϕ.(panels,panels')
+		# set-up and solve the system of equations
+	    A = [∂ₙϕ(pᵢ,pⱼ) for pᵢ in panels, pⱼ in panels]
 	    B = stack(panels.n) # all three excitations
 	    Q = A\B'            # solve for all three q's
-		-ρ .* sum(Φ(p.x,Q,panels)*p.n'*p.dA for p in panels)
+
+		# measure added mass
+		contribution(p) = Φ(p.x,Q,panels)*p.n'*p.dA
+		-ρ .* sum(contribution(p) for p in panels)
 	end
 	addedmass(panels)/(2π/3) # scale by exact solution
 end
@@ -282,7 +299,7 @@ md"""
 Since we've scaled by the solution, the result _should_ be the identity matrix, but there is some error.
 
 #### Actitivity:
- - Write a function `sphere_ma_error(h)` which uses `LinearAlgebra: norm,I` to compute the error of `M`.
+ - Write a function `sphere_ma_error(h)` which uses `LinearAlgebra: norm,I` to compute the `addedmass` error.
  - Make a plot of $h/R$ vs the error. Is the code validated?
  - Use the @time macro to determine how long each simulation takes as a function of h.
  - What valueof $h$ is pragmatic, and how might you generalize this to other geometries?
@@ -301,7 +318,7 @@ This notebook develops a 3D potential flow panel method and tests its prediction
 We were careful to visually and quantitatively check our intermediate results **at every step along the way**
  - We plotted the geometry and verified that every panel $dA\sim h^2$ and the total $A\approx 4\pi$.
  - We plotted the flow and visually checked that the boundary conditions were enforced.
- - We validated $|u|$ and $M$ by comparing to the analytic solution for the sphere, and demonstrated the numerical convergence with $h$.
+ - We compared to the analytic solution for the sphere's surface velocity magnitude and added mass, and demonstrated the numerical convergence with $h$.
 
 The same three-part procedure and careful verification and validation will be present for every example we use in this class (and hopefully in your work in the future as well).
 """
@@ -309,7 +326,7 @@ The same three-part procedure and careful verification and validation will be pr
 # ╔═╡ 9574fedd-8bc8-4363-8d46-c967d046573e
 begin
 	@eval Main.PlutoRunner format_output(x::Float64; context = default_iocontext) = format_output_default(round(x; digits = 3), context)
-	@eval Main.PlutoRunner format_output(x::AbstractArray{Float64}; context = default_iocontext) = format_output_default(round.(x; digits = 3), context)	
+	@eval Main.PlutoRunner format_output(x::AbstractArray{Float64}; context = default_iocontext) = format_output_default(round.(x; digits = 3), context)
 end;
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -324,7 +341,7 @@ TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
 
 [compat]
 ForwardDiff = "~0.10.39"
-NeumannKelvin = "~0.8.0"
+NeumannKelvin = "~0.9.0"
 Plots = "~1.41.4"
 StaticArrays = "~1.9.16"
 TypedTables = "~1.4.6"
@@ -336,7 +353,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "4a27d38c2f0e7c3d91800adac7ecc622dc22051e"
+project_hash = "0cad87de3e182e8c8c943d8ea8f83519567d95c3"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -733,9 +750,9 @@ version = "1.11.0"
 
 [[deps.FindFirstFunctions]]
 deps = ["PrecompileTools"]
-git-tree-sha1 = "1960e97427e0c1e66b603f4d047e6367a70c5d9e"
+git-tree-sha1 = "27b495de668ccea58de6b06d6d13181396598ea0"
 uuid = "64ca27bc-2ba2-4a57-88aa-44e436879224"
-version = "1.7.0"
+version = "1.8.0"
 
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
@@ -790,9 +807,9 @@ version = "0.2.0"
 
 [[deps.GR]]
 deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Preferences", "Printf", "Qt6Wayland_jll", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "p7zip_jll"]
-git-tree-sha1 = "6949039c4db076a5967228bf9d7b6f32f2324328"
+git-tree-sha1 = "ee0585b62671ce88e48d3409733230b401c9775c"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.73.20"
+version = "0.73.22"
 
     [deps.GR.extensions]
     IJuliaExt = "IJulia"
@@ -802,9 +819,9 @@ version = "0.73.20"
 
 [[deps.GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "FreeType2_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt6Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "04a6eb1e57dc3a6992b5af5aa753a2f8d3a1028e"
+git-tree-sha1 = "7dd7173f7129a1b6f84e0f03e0890cd1189b0659"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.73.20+0"
+version = "0.73.22+0"
 
 [[deps.GettextRuntime_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll"]
@@ -1175,21 +1192,19 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["AcceleratedKernels", "DataInterpolations", "FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "HCubature", "ImplicitBVH", "Krylov", "LinearAlgebra", "LinearOperators", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "TupleTools", "TypedTables"]
-git-tree-sha1 = "1711031221bbe726ff4ef94e2ccd1894a14de6be"
+git-tree-sha1 = "72f873533e5575a637422eec5a255d60d2786e0e"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.8.0"
+version = "0.9.0"
 
     [deps.NeumannKelvin.extensions]
     NeumannKelvinGeometryBasicsExt = "GeometryBasics"
     NeumannKelvinMakieExt = "Makie"
     NeumannKelvinNURBSExt = "NURBS"
-    NeumannKelvinPlotsExt = "Plots"
 
     [deps.NeumannKelvin.weakdeps]
     GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
     Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
     NURBS = "dde13934-061e-461b-aa91-2c0fad390a0d"
-    Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1215,9 +1230,9 @@ version = "1.6.1"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "f19301ae653233bc88b1810ae908194f07f8db9d"
+git-tree-sha1 = "c9cbeda6aceffc52d8a0017e71db27c7a7c0beaf"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.4+0"
+version = "3.5.5+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -1927,12 +1942,13 @@ version = "1.13.0+0"
 # ╔═╡ Cell order:
 # ╟─89ec7c70-c0cf-4bef-8e32-9dc4b2df91f4
 # ╠═75e7931e-aa95-4f30-8117-7b15c9344dbd
+# ╟─d8fdb518-b039-4dae-87d2-f471100cda43
 # ╟─a899175c-85fd-46ed-bd3a-b30c1e97c9d6
 # ╠═0576ce9d-dd33-4b20-915a-24421037d7c0
 # ╟─71df011e-bf21-47c3-85f0-18a9aca54fee
 # ╠═ceaa01da-9fba-454f-8a98-a13874f72295
 # ╟─6a2f8a49-6a92-45ac-b538-74f478594033
-# ╠═7d7397ad-8f64-41c8-9742-62921d21be9c
+# ╟─7d7397ad-8f64-41c8-9742-62921d21be9c
 # ╟─44da77a5-8fbc-40f8-a3c5-1006295dd59e
 # ╠═75db3a69-1e06-4482-9df0-a77451ceb005
 # ╟─b40064aa-c1b6-46c6-86fc-87661b3d4d27

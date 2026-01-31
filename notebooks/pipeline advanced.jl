@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.10
+# v0.20.21
 
 using Markdown
 using InteractiveUtils
@@ -32,11 +32,11 @@ end
 
 # ╔═╡ 84fa0a7a-81c1-4199-8d58-6ee5026c7527
 md"""
-# Advanced pipe-line examples: Using geometry files
+# Advanced pipeline examples: Using geometry files
 
 Defining the geometry in terms of an explicit parametric surface equation is by far the fastest and easiest approach. However, most engineering programs use and export surfaces in one of two other ways.
 
-## 1. NURBS: [Non-Uniform Rational B-Splines](https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline) 
+## 1. NURBS: [Non-Uniform Rational B-Splines](https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline)
 
 NURBS are used to describe smooth objects like ship hulls, and form the basis of most CAD tools such as Rhino and SolidWorks and some computer graphics programs like Blender. NURBS define the `x,y,z` position of the surface as a function of `u,v` inputs, like the surfaces we used in the last notebook, but their shape is easily modified via the spline control points.
 
@@ -49,13 +49,13 @@ md"""
 
 ## 2. STL Mesh: [Stereolithography format](https://en.wikipedia.org/wiki/STL_(file_format))
 
-STL is an extremely common format used in 3D printing and computer graphics. It describes a surface as a raw, unstructured mesh of triangular faces, oriented using the right-hand rule. 
+STL is an extremely common format used in 3D printing and computer graphics. It describes a surface as a raw, unstructured mesh of triangular faces, oriented using the right-hand rule.
 
-The format is widely used because of the generality, but it is _MUCH_ less efficient than NURBS:
+The format is widely used because of its generality, but it is _MUCH_ less efficient than NURBS:
 
 > "It is not possible to use triangles to perfectly represent curved surfaces. To compensate, users often save **enormous** STL files to reduce the inaccuracy. However, native formats associated with many 3D design applications use mathematical surfaces to preserve detail losslessly in small files. For example, Rhino 3D and Blender implement NURBS to create true curved surfaces and store them in their respective native file formats, but must generate a triangle mesh when exporting a model to the STL format." - [Wikipedia](https://en.wikipedia.org/wiki/STL_(file_format)#Characteristics)
 
-Luckily, computer scientists (and physical scientists) have developed excellent tools to speed up dealing with such meshes. I've used those method in the example below, but I will hold off explaining them until the next notebook. Here's a nice "little" example with 1456 triangles that I found online!
+Luckily, computer scientists (and physical scientists) have developed excellent tools to speed up dealing with such meshes. I've used those methods in the example below, but I will hold off explaining them until the next notebook. Here's a nice "little" example with 1,456 triangles that I found online!
 """
 
 # ╔═╡ 2b04c118-fadb-4987-8f71-305e6e5ef5f0
@@ -73,18 +73,18 @@ viz(dolphin_sys,vscale=20) # 3. Measure
 # ╔═╡ c1ae7feb-35f5-4ef3-a452-b90f23305cae
 md"""
 
-## Input processing example:
+## Input processing example
 
-The examples above have very clean input files, but it's much more typical for a file to require some processing. 
+The examples above have very clean input files, but it's much more typical for a file to require some processing.
 
-If you have a bad STL mesh, you will need to find/export another one or fix it using a dedicated meshing library. Finding the few triangles with flipped normals, or overlapping faces in a 20k face mesh in a notebook is not fun.  **You will also need to generate multiple versions of any STL-defined geometry so you can do a convergence study on you flow quantities of interest.**
+If you have a bad STL mesh, you will need to find/export another one or fix it using a dedicated meshing library. Finding the few triangles with flipped normals or overlapping faces in a 20k-face mesh in a notebook is not fun.  **You will also need to generate multiple versions of any STL-defined geometry so you can do a convergence study on your flow quantities of interest.**
 
-If you have a reasonably good NURBS file, you can do the clean up in a notebook. In that case, you could use *one* geometry file to predict across a range of geometric conditions, like sinkage and trim tests. 
+If you have a reasonably good NURBS file, you can do the cleanup in a notebook. In that case, you could use one geometry file to predict across a range of geometric conditions, like sinkage and trim tests.
 
 ---
 ### Ship hull example
 
-First I import a ship hull file and check each patch area using a helper `measurepatch` function."""
+First, I import a ship hull file and check each patch area using the helper `measurewhole` function."""
 
 # ╔═╡ 5bc6c6db-2449-4cc6-b8ba-756668b56c18
 begin
@@ -109,9 +109,9 @@ map(measurewhole,boat_patches[[1,2,4,7]]) |> Table |> viz
 
 # ╔═╡ e96e4098-d846-4256-8661-fd195b102d00
 md"""
-Since we measured the whole patch as one panel, the shape isn't well represented yet, but you can see the ship model is around 300m long and 30m tall. By comparing the areas to the vector above, we can see patch 1 is the midbody, patch 2 is the bow, patch 4 is the stern, and (by rotating the plot) patch 7 is a bildge keel. We'll skip that bildge surface as well.
+Since we measured the whole patch as one panel, the shape isn't well represented yet, but you can see the ship model is around 300 m long and 30 m tall. By comparing the areas to the vector above, we can see patch 1 is the midbody, patch 2 is the bow, patch 4 is the stern, and (by rotating the plot) patch 7 is a bilge keel. We'll skip that bilge surface as well.
 
-Using `panelize(;hᵤ=1,hᵥ=1)` would result in in 1500 panels. Let's start with 10m x 5m instead.
+Using `panelize(;hᵤ=1,hᵥ=1)` would result in 15,000 panels!! Let's start with 10 m × 5 m instead.
 """
 
 # ╔═╡ d41452bf-266e-42eb-b3fe-0002427315e1
@@ -119,16 +119,16 @@ viz(panelize(boat_patches[[2,3,4]];hᵤ=10,hᵥ=5),vscale=30,colormap=:autumn1)
 
 # ╔═╡ 67b6c1d7-48c2-4a52-ae00-33babcf27079
 md"""
-That's not terrible! It's clearly a ship... but its not great either. 
+That's not terrible! It's clearly a ship... but it's not great either.
 
-1. The panels on the bow and stern are way bigger than we wanted (150m²!!), and they are >10m tall intead of 10m long. We will transpose those patches so `u` runs roughly along x and `v` runs roughly along z. Hopefully this will also help panelize do a better job giving us panels of the correct size.
-1. We can see the geometry has a trim angle and it's keel is at z=0 instead of it's waterline. Since the draft should be 18.5m, we'll shift it down and use `submerge=true` to trim the surface at z=0.
-1. The surface is missing the transom! Unfortunately `NURBS.jl` didn't sucesessfully load that surface. We could try to fix the input file or add in a set of panels by hand, but we'll skip it here.
+1. The panels on the bow and stern are much larger than we wanted (150 m²!!), and they are >10 m tall instead of 10 m long. We will transpose the bow and stern patches so `u` runs roughly along x to keep our panels longer in that direction. Hopefully this will also help `panelize` do a better job of giving us panels of the correct area.
+1. We can see the geometry has a trim angle, and z=0 is the keel level instead of the waterline level. Since the draft should be 18.5 m, we'll shift the patches down and use `submerge=true` to trim the surface at z=0.
+1. The hull is missing the transom patch! Unfortunately, `NURBS.jl` didn't successfully load that surface. We could try to fix the input file or add a set of panels by hand, but we'll skip it here.
 """
 
 # ╔═╡ 7b8f8584-7a35-4a9c-9642-4ad3598ef76f
 begin
-	# map through the patches, transposing, panelizing, and concantenating
+    # map over and concatenate the patches:
 	panels = mapreduce(vcat,[1,2,4]) do i
 		S(u,v) = boat_patches[i](u,v)[1]-SA[0,0,18.5] # shift the patch down
 		transpose = i≠1  # don't transpose the midbody
@@ -141,7 +141,7 @@ end
 
 # ╔═╡ 20a6c891-6087-4859-9271-377877470e94
 md"""
-Not perfect, but much better! The panels are around 10mx5m (smaller in regions of high curvature) and oriented correctly. The ship is below z=0 and has the correct draft. 
+Not perfect, but much better! The panels are around 10mx5m (smaller in regions of high curvature) and oriented correctly. The ship is below z=0 and has the correct draft.
 
 We're still missing the transom and the trimmed waterline is a little jagged, but this should give us a perfectly good double-body flow. Let's do it!"""
 
@@ -176,7 +176,7 @@ FileIO = "~1.17.1"
 GeometryBasics = "~0.5.10"
 MeshIO = "~0.5.3"
 NURBS = "~0.8.0"
-NeumannKelvin = "~0.8.2"
+NeumannKelvin = "~0.9.0"
 PlutoUI = "~0.7.79"
 WGLMakie = "~0.13.8"
 """
@@ -185,9 +185,9 @@ WGLMakie = "~0.13.8"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.2"
+julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "cfc6cf830189f730c3bba810eb92683b00d76633"
+project_hash = "cac40077dd6715cf36a5f55a75609fba53414610"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1389,21 +1389,15 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["AcceleratedKernels", "DataInterpolations", "FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "HCubature", "ImplicitBVH", "Krylov", "LinearAlgebra", "LinearOperators", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "TupleTools", "TypedTables"]
-git-tree-sha1 = "80c5183ab5e05d542fb3337090583a76072074af"
+git-tree-sha1 = "72f873533e5575a637422eec5a255d60d2786e0e"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.8.2"
+version = "0.9.0"
+weakdeps = ["GeometryBasics", "Makie", "NURBS"]
 
     [deps.NeumannKelvin.extensions]
     NeumannKelvinGeometryBasicsExt = "GeometryBasics"
     NeumannKelvinMakieExt = "Makie"
     NeumannKelvinNURBSExt = "NURBS"
-    NeumannKelvinPlotsExt = "Plots"
-
-    [deps.NeumannKelvin.weakdeps]
-    GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
-    Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-    NURBS = "dde13934-061e-461b-aa91-2c0fad390a0d"
-    Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 
 [[deps.Observables]]
 git-tree-sha1 = "7438a59546cf62428fc9d1bc94729146d37a7225"
@@ -1451,7 +1445,7 @@ version = "3.4.4+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+2"
+version = "0.8.5+0"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "NetworkOptions", "OpenSSL_jll", "Sockets"]

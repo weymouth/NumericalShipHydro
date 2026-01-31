@@ -27,17 +27,17 @@ In the last notebook, we wrote a panel method in only 4 lines of code. But we sa
 2. **Solve** the linear system for the panel strengths `q` (_easy_)
 3. **Measure** the system to generate whatever results you are interested in (_harder_?)
 
-**Step 2** is by far the easiest from a user point of view. Each system is treated identically and the computer is doing all the work!
+**Step 2** is by far the easiest from a user's point of view. Each system is treated identically and the computer is doing all the work!
 
 **Step 3** is harder, mostly because there are many potential things we might want to measure. But once you have carefully developed and validated a measurement function, you can use it forever!
 
 **Step 1** is typically the hardest because every problem is different. Trying to improve our panelization was tricky even for the simple sphere example, and dealing with more general problems like ship hulls and free surfaces is exponentially more complex.
 
-We will use functions in the Neumann-Kelvin package to *simplify the simulation prediction pipeline*, particularly the set-up. But we need to be careful to avoid the most critical error of all:
+We will use functions in the NeumannKelvin package to *simplify the simulation prediction pipeline*, particularly the setup. But we need to be careful to avoid the most critical error of all:
 
-|Type 5A: Black box user error!|
+|Type 5A: Black-box user error!|
 |:---:|
-|The worst and most common type of human error occurs when people use prediction tools as a black box, without understanding them. As an engineer you are responsible for the correctness of your results - fight that temptation!
+|The worst and most common type of human error occurs when people use prediction tools as a black box, without understanding them. As an engineer, you are responsible for the correctness of your results — fight that temptation!
 
 ## 1. Set-up: Automated panelization and visualization
 
@@ -76,7 +76,7 @@ The function `sphere` samples the [parametric surface equation](https://en.wikip
 - Look up **a different** parametric surface online and implement a function to generate panels on that surface. (If you want a second example, there is one below.)
  - Plot the surface and check if the areas are fairly uniform. _Should_ they be for your shape?
 
-There is another example below you can look at as well but don't delete it, we'll want it later.
+There is another example below you can look at as well.
 """
 
 # ╔═╡ 64b3c8b6-0eda-41e3-ac91-3a9c9f51006f
@@ -96,7 +96,7 @@ md"""
 
 ## Example: Wigley hull
 
-Finally - we get to a ship-like shape in the numerical ship hydrodynamics class! The Wigley hull is a classic example used in [numerical and experimental studies](https://scholar.google.co.uk/scholar?hl=en&as_sdt=0%2C5&q=wigley+hull&btnG=) because its parametric equation is a simple parabola
+Finally — we get to a ship-like shape in the numerical ship hydrodynamics class! The Wigley hull is a classic example used in [numerical and experimental studies](https://scholar.google.co.uk/scholar?hl=en&as_sdt=0%2C5&q=wigley+hull&btnG=) because its parametric equation is a simple parabola
 
 $\eta(\xi,\zeta) = (1-\xi^2)(1-\zeta^2)$
 
@@ -132,7 +132,7 @@ begin
 		portside = wigley_demihull(h;B=-B,kwargs...) # reflected ??
 		return [starboard; portside]   # concatenate them together
 	end
-	viz(wigley_hull(h;B,D),vscale=0.25)
+	viz(wigley_hull(h;B,D),vscale=0.25,colorrange=(0,h^2))
 end
 
 # ╔═╡ b9d28dea-9f7d-4826-8f61-4e5e82227eee
@@ -140,19 +140,19 @@ md"""
 
 ### Virtual reflection: The method of images
 
-Instead of doubling (or quadrupling) the number of panels, we should use the **method of images** which reflects the influence of the panel onto the other side of the axis. For every panel $p$ we say
+Instead of doubling (or quadrupling) the number of panels, we should use the **method of images**, which reflects the influence of the panel across the axis. For every panel $p$ we say
 
 $\phi = \int G(x,p) + \int G(x,m(p)) = \int G(x,p) + \int G(m(x),p)$
 
-where $m$ is a mirror function and we can *either* mirror the panel or mirror the query point - they give the same result since $\int G$ is symmetric. We'll use the second option since `m(x)= x .* [1,-1,1]` is all we need to mirror a point across the y-axis.
+where $m$ is a mirror function, and we can either mirror the panel or mirror the query point — they give the same result since $\int G$ is symmetric. We'll use the second option since `m(x) = x .* [1,-1,1]` mirrors a point across the y-axis.
 
-Why is this so much better than *explicitly* reflecting the panels? It's **twice** as efficient! Solving for half as many unknowns is twice as fast, as is measuring the results. This is a nice segue into step 2, solving the system.
+Why is this so much better than explicitly reflecting the panels? It's **twice** as efficient! Solving for half as many unknowns is twice as fast, as is measuring the results. This is a nice segue into step 2: solving the system.
 
 ## 2. Solve: bundling panels and metadata
 
-Solving was easy, in fact the only tricky bit was remembering to use the same background flow `U` to make the right-hand side vector and to measure the velocity. Similarly, we now need to be careful to consistently use the symmetry information when forming the influence matrix and measuring.
+Solving was easy; in fact, the only tricky bit was remembering to use the same background flow `U` to make the right-hand side vector and to measure the velocity. Similarly, we now need to be careful to consistently use the symmetry information when forming the influence matrix and measuring.
 
-This is known as **metadata**, and I've created a very simple "struct" called `BodyPanelSystem` to bundle the metadata together with our panels and source strength `q`.
+This is known as **metadata**, and I've created a very simple `struct` called `BodyPanelSystem` to bundle the metadata together with our panels and source strength `q`.
 
 Let's try this on the sphere first.
 """
@@ -165,7 +165,7 @@ md"""
 This new `BodyPanelSystem` object has a nice summary of what's inside it:
  - How many panels define the body and the surface area and volume of that body.
  - The background flow `U`.
- - All the `mirrors`. Notice even in this case without a symmetry axis, it lists the "null" mirror [1,1,1] which leaves the point unchanged.
+- All the `mirrors`. Notice that even in this case without a symmetry axis, it lists the "null" mirror [1,1,1], which leaves the point unchanged.
  - Finally, it tells you that this panel system has strength `q=0`. That's because we haven't solved it yet!
 
 Let's fix that last point using the function `directsolve!`:
@@ -178,7 +178,7 @@ sphere_sys = BodyPanelSystem(sphere(1/4)) |> directsolve!
 md"""
 ### Activity
 
-- That function threw a warning. Read the docs to make sure everything it okay.
+- That function threw a warning. Read the docs to make sure everything is okay.
 - Is it just me... or was that *very* fast? Can you see why in the docs?
 - Did the solution update? Do the extreme values make sense for a sphere flow?
 
@@ -194,7 +194,7 @@ addedmass(sphere_sys)
 
 # ╔═╡ e08a089d-9663-40b4-8dee-899449205bbc
 md"""
-The docs explain that this is the first row of the added mass vector (the surge response), and that the output has already been scaled by the displaced mass `ρV`. The prediction is within 1% of the analytic solution [1/2,0,0]!
+The docs explain that this is the first row of the added mass vector (the surge response), and that the output has already been scaled by the displaced mass `ρV`. The prediction is within 1% of the analytic solution, [1/2, 0, 0]!
 
 But let's actually _look_ at the solution!
 """
@@ -214,11 +214,11 @@ The default visualization for a `BodyPanelSystem` shows the `cₚ` and the induc
 
 ### Double-body flow
 
-Let's return back to the Wigley hull example. The ship has been positioned below the free surface at $z=0$, but we won't solve the free surface problem until next week. Instead, we will consider the **double-body flow** which is the flow around the ship and its reflection across the free surface plane.
+Let's return to the Wigley hull example. The ship has been positioned below the free surface at $z=0$, but we won't solve the free surface problem until next week. Instead, we will consider the **double-body flow**, which is the flow around the ship and its reflection across the free surface plane.
 
-> We will see next week that this is equivalent to the low speed limit of the free surface flow.
+> We will see next week that this is equivalent to the low-speed limit of the free surface flow.
 
-I've coded up the double hull geometry, but we don't really want to use it...
+I've coded up the double-hull geometry, but we don't really want to use it...
 """
 
 # ╔═╡ 6e657f83-fe06-4311-aaf5-0c88fb13dc8e
@@ -228,17 +228,17 @@ begin
 		above = wigley_hull(h;D=-D,kwargs...) # reflected
 		return [below; above]   # concatenate them together
 	end
-	viz(wigley_doublehull(h;B,D),vscale=0.25)
+	viz(wigley_doublehull(h;B,D),vscale=0.25,colorrange=(0,h^2))
 end
 
 # ╔═╡ 84fa0a7a-81c1-4199-8d58-6ee5026c7527
 md"""
 
 ### Activity
- 1. Create and solve the explicitly double-body system. (If you didn't fix the problem with `wigley_hull` already, you'll need to do it now!)
+ 1. Create and solve the explicit double-body system. (If you didn't fix the problem with `wigley_hull` already, you'll need to do it now!)
  1. Use the method of images to get the double-body solution using only the `demihull` panels. How many mirrors are there?
  1. Compare the extrema of `q` and the inline `addedmass` vector between the explicit and virtual double-body panel systems. Do they match? Should they?
- 1. Compare the solve time required for the two methods. Did you get the speed-up you expected using the method of images?
+ 1. Compare the solve time required for the two methods. Did you get the speedup you expected using the method of images?
  1. **Bonus:** How many demihulls would you need to create a Wigley **catamaran** and solve for the double-body flow?
 
 """
@@ -257,12 +257,12 @@ In this notebook we unlocked the full potential (get it?) of the Neumann-Kelvin 
 - Automatic methods to panelize a surface defined by a parametric surface
 - Concatenating patches of panels together to form more complex geometries (like demihulls and catamarans)
 
-2. **Solve**: efficient system description and solve
-- Wrap panels and meta-data to avoid mistakes and helper code
-- Method of images and multi-threading to speed up the solution
+2. **Solve**: efficient system description and solution
+- Wrap panels and metadata to avoid mistakes and helper code
+- Method of images and multithreading to speed up the solution
 
 3. **Measure**: validated functions
-- Visualize and measure on known solutions to validate approach(!)
+- Visualize and measure on known solutions to validate the approach(!)
 - Visualize and measure on new problems with confidence
 
 """
@@ -280,7 +280,7 @@ NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
 WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
 
 [compat]
-NeumannKelvin = "~0.8.1"
+NeumannKelvin = "~0.9.0"
 WGLMakie = "~0.13.8"
 """
 
@@ -290,7 +290,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "83f16dfbe9c2e8fe0708689d04c29e224bc8e28b"
+project_hash = "f7ea2d87c3f5f766ba60e15ff1813690dca8aebc"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1445,21 +1445,19 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["AcceleratedKernels", "DataInterpolations", "FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "HCubature", "ImplicitBVH", "Krylov", "LinearAlgebra", "LinearOperators", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "TupleTools", "TypedTables"]
-git-tree-sha1 = "ef87ef6dc9e081a84b83b0a17fa29a7bcff4930c"
+git-tree-sha1 = "72f873533e5575a637422eec5a255d60d2786e0e"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.8.1"
+version = "0.9.0"
 
     [deps.NeumannKelvin.extensions]
     NeumannKelvinGeometryBasicsExt = "GeometryBasics"
     NeumannKelvinMakieExt = "Makie"
     NeumannKelvinNURBSExt = "NURBS"
-    NeumannKelvinPlotsExt = "Plots"
 
     [deps.NeumannKelvin.weakdeps]
     GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
     Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
     NURBS = "dde13934-061e-461b-aa91-2c0fad390a0d"
-    Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 
 [[deps.Observables]]
 git-tree-sha1 = "7438a59546cf62428fc9d1bc94729146d37a7225"
@@ -1517,9 +1515,9 @@ version = "1.6.1"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "f19301ae653233bc88b1810ae908194f07f8db9d"
+git-tree-sha1 = "c9cbeda6aceffc52d8a0017e71db27c7a7c0beaf"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.4+0"
+version = "3.5.5+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -2053,9 +2051,9 @@ version = "0.4.1"
 
 [[deps.Unitful]]
 deps = ["Dates", "LinearAlgebra", "Random"]
-git-tree-sha1 = "c25751629f5baaa27fef307f96536db62e1d754e"
+git-tree-sha1 = "57e1b2c9de4bd6f40ecb9de4ac1797b81970d008"
 uuid = "1986cc42-f94f-5a68-af5c-568840ba703d"
-version = "1.27.0"
+version = "1.28.0"
 
     [deps.Unitful.extensions]
     ConstructionBaseUnitfulExt = "ConstructionBase"

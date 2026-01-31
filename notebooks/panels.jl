@@ -23,9 +23,9 @@ using PlutoUI
 md"""
 # Numerical Panels & Julia Basics
 
-In this notebook, we will investigate different numerical methods to deal with the integral and derivatives of the panel Greens Function. 
+In this notebook, we will investigate numerical methods to deal with the integrals and derivatives of the panel Green’s function.
 
-Here is a sneak peak of the final plot of the flow around a 2D source panel.
+Here is a sneak peek of the final plot of the flow around a 2D source panel.
 """
 
 # ╔═╡ 8d7f2d16-f346-4d6f-b8b8-768f9368b160
@@ -39,18 +39,18 @@ md"""height $(@bind py Slider(-2:0.1:2,default=0))"""
 
 # ╔═╡ b3196c49-c99d-4b6c-bb63-aa9d55306f93
 md"""
-This plot is generated with [Julia](https://julialang.org/) which has many advantages for investigating and developing numerical methods. It's simple and flexible and [very fast](https://julialang.org/benchmarks/) at numerical computing!
+This plot is generated with [Julia](https://julialang.org/) which has many advantages for investigating and developing numerical methods. It's simple, flexible, and [very fast](https://julialang.org/benchmarks/) for numerical computing!
 
 ![Julia benchmarks](https://julialang.org/assets/images/benchmarks.svg)
 
-The syntax is similar to Python and MATLAB, **but better!** By the end of this notebook, you'll have the basics covered. 
+The syntax is similar to Python and MATLAB, **but better!** By the end of this notebook, you'll have the basics covered.
 """
 
 # ╔═╡ 9b6b5d2b-a2f1-4378-9ae3-a9de62912d56
 md"""
 ## 2D source function
 
-Let's just start by plotting the Greens Function. We'll consider **2D flow** so we can use 1D integration and derivatives at first. In class, we said the fundamental 2D solution was
+Let's just start by plotting the Green’s function. We'll consider **2D flow** so we can use 1D integration and derivatives at first. In class, we said the fundamental 2D solution was
 
 $G(x) = \frac 12 \log(x^2)$
 
@@ -70,60 +70,73 @@ end
 begin
 	using ForwardDiff: derivative
 	dG_hand(x) = 1/x # d(0.5log(x²)) = 0.5d(log(x²))*d(x²) = 0.5/x²*2x = 1/x
-	dG_finite(x;h=eps()) = (G(x+h)-G(x-h))/2h
+	dG_finite(x;h=eps()) = (G(x+h)-G(x-h))/2h # Central difference
 	dG_auto(x) = derivative(G,x) # Wow! Hard work!!
 end;
 
 # ╔═╡ e1319af7-e552-48d7-bd91-4ea65c5adb17
-G(1),G(2),G(3)
+G(1/3),G(1),G(Inf) # try a few values
+
+# ╔═╡ c40af00e-43e9-448e-b45c-ffc94c8d09f8
+md"""
+Now we can plot the function. `Plots` is the default plotting package. Use the "Live Docs" to check on functions like `range` and arguments like `ylims`.
+"""
 
 # ╔═╡ d377f6bd-c169-45b0-b356-7eb69712e9e9
 md"""
-Julia makes it easy to deal with vectors, but Julia throw an error on `G(x)` because `x^2` doesn't make sense on a vector `x` automatically.
+## Vectors
+
+Julia makes it easy to create vectors and some operators work on vectors automatically.
 """
 
 # ╔═╡ 48490cb3-c252-4165-b7de-88c2077160bb
-x = [-1,-0.5,0,0.5,1]
+x_vector = [-1,-0.5,0,0.5,1] # you can put numbers in brackets
+
+# ╔═╡ 0192f438-5b07-4bcc-863c-0580e0868a77
+collect(-1:0.5:1) # you can also `collect` a `range` into a vector
 
 # ╔═╡ 966fc702-dcff-4568-8b0b-f8e8eb750150
-2x
+2x_vector
+
+# ╔═╡ f25ba1ea-ddaf-474e-8298-59b82a2a2023
+md"But Julia throws an error on `G(x)` because `x^2` is ambiguous for a vector. You might intend an inner product `x⋅x = x' x`, or an outer product `x x'`. Therefore, most Julia functions need a little help to deal with vector inputs."
 
 # ╔═╡ dfd90e9a-00d2-46ee-89ed-9508394e0ea2
-G(x) # needs a little help
+G(x_vector) # needs a little help
 
 # ╔═╡ 72854972-c07a-4201-b6ea-7e75c2b06f1c
 md"""
-We don't need a `for`-loop! Instead, we have three options to tell Julia to "vectorize" the function call
+**You should not use a `for`-loop and `push` for this!**
 
-1. We can use an [array comprehension](https://docs.julialang.org/en/v1/manual/arrays/#man-comprehensions) (just like in python).
+Instead, we have three good options to tell Julia to "vectorize" the function call
+
+1. We can use an [array comprehension](https://docs.julialang.org/en/v1/manual/arrays/#man-comprehensions) (just like in Python).
 2. We can `map` the function over the array.
-3. We can use broadcast syntax `G.(x)`. You can apply this `.` after any function to broadcast it over the vector.
+3. We can `broadcast` using the dot syntax `G.(x)` which can be applied to any function to broadcast it over the arguments.
 
-Broadcast is easiest and most general, but I'll try to use `map` in this notebook to help you follow along!
+The `map` and `broadcast` versions are very efficient and they are used a lot inside Julia packages. To keep core examples readable, we'll use comprehensions here and call out `map` and broadcast use explicitly in the plotting examples.
 """
 
 # ╔═╡ 7ffb2853-4b1e-4434-9ef3-5dbffdad2cd2
 begin # Don't use a for-loop!!
 	notlikethis = []
-	for xᵢ in x
-		push!(notlikethis,G(xᵢ)) # yuck🤢
+	for x in x_vector
+		push!(notlikethis,G(x)) # this is really inefficient🤢
 	end
 	notlikethis
 end
 
 # ╔═╡ 218ac5ff-a6a8-43b8-bfb4-c707af4592a3
-[G(xᵢ) for xᵢ in x] # comprehension
+[G(x) for x in x_vector] # comprehension
 
 # ╔═╡ 5a072d68-721a-420b-924f-4f9c0054b2f5
-map(G,x) # map
+map(G,x_vector)
+
+# ╔═╡ 92b31060-b3b8-43e2-a294-513237a46e7d
+broadcast(G,x_vector)
 
 # ╔═╡ 910cb09e-1214-480e-8b2a-15df3c49109d
-G.(x) # broadcast
-
-# ╔═╡ c40af00e-43e9-448e-b45c-ffc94c8d09f8
-md"""
-Anyway, now we can plot the function near the singularity. `Plots` is the default plotting package. Use the "Live Docs" to check on functions like `range` and arguments like `ylims`.
-"""
+G.(x_vector) # dot syntax
 
 # ╔═╡ 39b1dd25-2b26-4bba-a6ae-74cd0d8e6258
 md"""
@@ -134,8 +147,8 @@ Consider the integral
 $F = \int_{-h/2}^{h/2} f(x) dx$
 
 where $h$ is a small interval. You're already familiar with many example quadratures we can use to estimate this integral:
- - mid-point rule: $F \approx h f(0)$
- - trapezoid rule: $F \approx \frac h2 [f(-h/2)+f(h/2)]$
+ - midpoint rule: $F \approx h f(0)$
+ - trapezoidal rule: $F \approx \frac h2 [f(-h/2)+f(h/2)]$
  - Simpson's rule: $F \approx \frac h6 [f(-h/2)+4f(0)+f(h/2)]$
 
 These algorithms are all simple but they require 1,2 and 3 function evaluations, respectively. How accurate are each of these?
@@ -144,72 +157,78 @@ Let's experiment with our 2D test case
 """
 
 # ╔═╡ 530b5720-aee1-4e2c-90f4-d2205d46718f
-begin # set up our "panels"
-	N = 9                    # number of panels
-	pnts = range(-1,1,N+1)   # end-points
-	lower = pnts[1:end-1]    # lower limits of each panel
-	upper = pnts[2:end]      # upper limits
-	middle = (lower+upper)/2 # mid-points
-end;
+md"number of panels: N $(@bind N Slider(4:20, default=9, show_value=true))"
 
 # ╔═╡ a22843d9-7482-41b4-8135-7904bd4ba28d
-begin # get analytic result and make a midpoint function
+begin
+	# make functions for the analytic solution and the midpoint rule
 	G_int(x) = 0.5x*log(x^2)-x         # indefinite integral
-	exact = map(G_int,upper) - map(G_int,lower)
-	midpoint(f,a,b) = (b-a)*f((a+b)/2) # Midpoint rule for any function `f`
+	exact(a,b) = G_int(b)-G_int(a)     # definite integral
+	midpoint(f,a,b) = (b-a)*f((a+b)/2) # midpoint rule for any function `f`
+
+	# make "panels"
+	pnts = range(-1,1,N+1)             # split up the range
+	a,b = pnts[1:N],pnts[2:N+1]        # panel endpoints
+	m = [(a[i]+b[i])/2 for i in 1:N]   # panel midpoint
 end;
 
 # ╔═╡ f38e4dbe-6b5e-4dc6-8565-8e4ad23dcfa3
-begin # plot them
+begin # make the plot
 	scatter(pnts,zero,shape=:vline,c=:black,label="panels",xlabel="x")
-	scatter!(middle,exact,label="Exact integral")
-	scatter!(middle,midpoint.(G,lower,upper),alpha=0.5,label="Midpoint rule")	
+
+	exact_vals = [exact(a[i],b[i]) for i in 1:N]
+	# exact_vals = map(exact,a,b) # could also be used
+	scatter!(m,exact_vals,label="Exact integral")
+
+	midpoint_vals = [midpoint(G,a[i],b[i]) for i in 1:N]
+	# midpoint_vals = midpoint.(G,a,b) # could also be used
+	scatter!(m,midpoint_vals,alpha=0.5,label="Midpoint rule")
 end
 
 # ╔═╡ df681b66-5ccd-4b21-ac48-d3f6ef6b80d9
 md"""
 ### Activity
  - Change the number of panels. Everything updates automatically!
- - Add one of the other rules and compare the results. 
+ - Add one of the other rules and compare the results.
  - Try plotting the error instead of the value.
 
 ## Truncation error
 
-We can predict the performance of quadratures by expressing $f$ in terms of it's Taylor series
+We can predict the performance of quadratures by expressing $f$ in terms of its Taylor series
 
 $f(x) = f_0 + xf_0' + \frac{x^2}2 f_0'' + \frac{x^3}{6} f_0''' + \ldots$
 
-where subscript $0$ denotes evaluation at $x=0$ and each tick $'$ indicates a derivative. Substitution into the integral and algebraic manipulation gives:
- - mid-point: $F = hf_0 + \frac 1{24} h^3 f_0'' + O(h^4)$
- - trapezoid: $F = \frac h2 [f(-h/2)+f(h/2)] -\frac 1{12}h^3 f_0''+O(h^4)$
+where the subscript $0$ denotes evaluation at $x=0$, and each prime `$'$` indicates a derivative. Substitution into the integral and algebraic manipulation gives:
+ - midpoint: $F = hf_0 + \frac 1{24} h^3 f_0'' + O(h^4)$
+ - trapezoidal: $F = \frac h2 [f(-h/2)+f(h/2)] -\frac 1{12}h^3 f_0''+O(h^4)$
  - Simpson's: $F = \frac h6 [f(-h/2)+4f(0)+f(h/2)] + O(h^4)$
 
-where $O(h^4)$ means all the following terms are proportional to $h$ to the power of 4 or greater. Since the quadrature neglected these additional terms, they have a well-defined _truncation error_.
+where $O(h^4)$ means the remaining terms are proportional to $h$ to the forth or higher power. Since the quadrature neglected these additional terms, they have a well-defined _truncation error_.
 
 |Type 3: Numerical truncation error|
-|:---:| 
+|:---:|
 |Errors due to truncating an infinite series at some power of the step length $h$|
 
-Unlike system description errors or modelling errors, numerical truncation errors can be well estimated and controlled without access to the "true" result. 
+Unlike system description errors or modelling errors, numerical truncation errors can be well estimated and controlled without access to the "true" result.
  - As long as the function is smooth, a small value of $h$ will make $h^3 f''$ negligible.
- - Surprisingly, the trapezoid rule _doubles_ the error of the midpoint rule and doubles evaluations, so it's not a good choice.
+ - Surprisingly, the trapezoidal rule _doubles_ the error of the midpoint rule and requires twice as many evaluations, so it's not a good choice.
 """
 
 # ╔═╡ 22fc08d3-a755-4dcb-8807-d706dc263a4b
 md"""
 ## Gaussian quadratures
 
-[Gaussian quadratures](https://en.wikipedia.org/wiki/Gaussian_quadrature) are family of simple but **very** accurate numerical integration methods. A Gaussian quadrature requires evaluating the function at $n$ special points $x_i$ (instead of simple fractions of $h$) and computing their sum with weights $w_i$.
+[Gaussian quadratures](https://en.wikipedia.org/wiki/Gaussian_quadrature) are a family of simple but **very** accurate numerical integration methods. A Gaussian quadrature requires evaluating the function at $n$ special points $x_i$ (instead of simple fractions of $h$) and computing their sum with weights $w_i$.
 
 $\int_{-1}^{1} f(x) dx = \sum_{i=1}^n w_i f(x_i)+O(h^{2n+1}f^{(2n)})$
 
-The 1-point rule uses $x=[0],\ w=[2]$ matching the midpoint rule. However, every additional point scales the error down by $h^2$ for smooth functions! This is **much** better than the fractional-step methods like Trapezoid and Simpson's rule.
+The 1-point rule uses $x=[0],\ w=[2]$ matching the midpoint rule. However, every additional point scales the error down by $h^2$ for smooth functions! This is **much** better than fractional-step methods like the trapezoidal and Simpson's rules.
 
-The function below shows the Guass points and weights for `n=2`, and you can check the values for any `n`.
+The function below shows the Gauss points and weights for `n=2`, and you can check the values for any `n`.
 """
 
 # ╔═╡ e828c1e4-4c72-4bfa-8af9-0007101b56e2
-md"""n $(nslide = @bind n Slider(1:6,default=2,show_value=true))"""
+md"Gauss-points: n $(nslide = @bind n Slider(1:6,default=2,show_value=true))"
 
 # ╔═╡ 91391364-b204-460c-9132-e3b2bbb0cc18
 begin
@@ -227,10 +246,10 @@ test_cubic(x) = x^3-3x^2+x
 md"The integral of this function over [-1,1] is -2. Let's sample the function at the special Gauss points:"
 
 # ╔═╡ 9cb4efe4-cafc-4c20-83da-665ef707b9dc
-map(test_cubic,xgl)
+[test_cubic(x) for x in xgl]
 
 # ╔═╡ c502e0ee-c53b-4f44-a2e6-d152c733b616
-md"We need to multiply these values by the weights, and then take the sum. Again, there are a lot of ways we can do this kind of opperation in Julia. We could do a `for`-loop..."
+md"We need to multiply these values by the weights, and then take the sum. Again, there are a lot of ways we can do this kind of operation in Julia. We could sum over a `for`-loop..."
 
 # ╔═╡ c5af3969-ff3f-43c5-b532-4e70bdf5cfef
 begin
@@ -243,26 +262,22 @@ end
 
 # ╔═╡ 2f5e8100-d212-4cae-b8e9-67c633f555d9
 md"""
-which gives us the correct result up to 16 digits!! Indeed, a two point Gauss quadrature can **exactly** integrate any cubic function up to the floating point accuracy of our numbers (more on this at the end of the notebook).
+which gives us the correct result up to 16 digits!! Indeed, a two-point Gauss quadrature can **exactly** integrate any cubic function up to the floating-point accuracy of our numbers! (I'll say more about floating-point accuracy in the next section of the notebook.)
 
-We can clean up the code above using the `sum` function over a comprehension:
+We can clean up the code above using the `sum` function over a comprehension.
 """
 
 # ╔═╡ 33295048-2c6a-4a08-bb2b-2c7dcb6d7421
 sum(wgl[i]*test_cubic(xgl[i]) for i in eachindex(xgl,wgl))
 
-# ╔═╡ c48e953e-178b-4bf8-ab58-9aaa6bfae1ff
-md"But the *cleanest* way is to use the fact that a weighted average is simply the **inner product** of two vectors. You can make a column vector into a row with a transpose (`'`), and when you multiply a row vector by a column vector, the result is the inner product of the two!"
-
-# ╔═╡ cc086099-18c8-474e-a0fa-1d0dbfa6b82c
-wgl' # transpose of the nx1 column vector into 1xn row vector
-
-# ╔═╡ c57279a7-0a28-4872-b14d-8a634f3253d7
-wgl'*map(test_cubic,xgl) # inner product!
+# ╔═╡ 55b536da-1666-4831-8f95-d92694c51a93
+sum(w*test_cubic(x) for (x,w) in zip(xgl,wgl))
 
 # ╔═╡ a397cafe-3e42-41d8-8576-9d304c7dbee6
 md"""
-I think that the inner-product is the nicest way to do the weighted sum, but feel free to use more explicit methods like the `sum` comprehension in your own code if you prefer!
+I prefer the `sum` notation, and using `zip` keeps the final function very clean.
+
+> I like to think of `zip` as "zipping together" two arrays into one. But remember that you can look up functions like `sum` and `zip` in the Live docs for more examples.
 
 Now let's turn this into a quadrature function that will work with any input function `f`. And we'll also use a change of variable to enable any integration range:
 
@@ -271,65 +286,58 @@ $\int_a^b f(x) dx = \frac{b-a}2 \int_{-1}^1 f\left(\frac{a+b}2+\frac{b-a}2 t\rig
 
 # ╔═╡ 97682af1-bebc-49a2-9d5f-ad0acf7ddd34
 begin
-	quadgl(f) = wgl'*map(f,xgl)    # generic function f
-	function quadgl(f,a,b)        # generic range [a,b]
-	    h,j = (b-a)/2,(a+b)/2 
+	# apply Gauss-Legendre quatrature to a generic function `f`
+	quadgl(f) = sum(w*f(x) for (x,w) in zip(xgl,wgl))
+
+	# shift to integrate over a generic range x ∈ [a,b]
+	function quadgl(f,a,b)
+	    h,j = (b-a)/2,(a+b)/2
 	    h*quadgl(t->f(j+h*t))
 	end
 end;
 
 # ╔═╡ 886562c5-0f42-4d26-9a98-5632281f05d8
-quadgl(test_cubic)+2 # still works
+quadgl(test_cubic) # Should still be 2
 
 # ╔═╡ 150ffade-4b10-4579-a4fa-41db4a820484
-quadgl(test_cubic,0,4)-8 # "exact" for any cubic!
+quadgl(test_cubic,0,4) # Should be 8
 
 # ╔═╡ 1e544266-358e-4b8a-8856-7ef07c538b75
-quadgl(sin,0,π/2)-1 # great for general functions too!
+quadgl(sin,0,π/2) # Should be 1
+
+# ╔═╡ b3e77311-7aa3-4e0d-8be2-54b305da0a70
+md"""
+n $nslide
+
+The `n=2` point quadrature doesn't exactly integrate `sin` but it's still very accurate. Try increasing `n` to watch the error drop.
+"""
 
 # ╔═╡ 4cef9215-1301-4581-8ed1-1bea4fb3dfe9
 md"""
 ## Julia tangent...
 
 Before applying this to our 2D flow case, the example above has a lot of new Julia syntax worth pointing out:
- - Multi-line functions:
-		function name(arguments)
-			stuff
-		end
- - Anonymous (in-place) functions: `x->2x`
- - Function overloading: `qaudgl(f)` and `quadgl(f,a,b)`
- 
-Let's dig into the transpose a bit more by looking at 3 different products of two  vectors.
-"""
+ - The `function` syntax (`function quadgl(f,a,b)...`) is used to define functions over more than one line.
+ - The `->` syntax (`t->f(j+h*t)`) is used to define functions without giving them a name. It's a helpful shortcut when a function is only used once, but it's always optional.
+- Function dispatch (`qaudgl(f)` vs `quadgl(f,a,b)`) lets us specify what a function should do when called with different types of arguments. This is one of things [Julia does better than any other language](https://www.youtube.com/live/kc9HwsxE1OY?si=rym9JwmQB3j-vtdE&t=130).
 
-# ╔═╡ bda29531-6902-42a9-b3c2-92b0e5a5547b
-u,v = 1:4,5:8
-
-# ╔═╡ dfe20f1c-b4ef-429b-a20c-7495d131b317
-u .* v # broadcast product [u[i]*v[i] forall i]
-
-# ╔═╡ 47578e40-c922-4475-9e78-e82e21e03243
-u' * v # inner product! sum(u[i]*v[i] forall i)
-
-# ╔═╡ 3592f424-bee5-4a64-a159-b302824f7f35
-u * v' # outer product! [u[i]*v[j] forall i,j]
-
-# ╔═╡ b6d91d56-9e69-4619-b231-7b844339131c
-md"""
-We've used the **inner product** to do the Gaussian quadrature weighted sum and the **outer product** is how I made the X-Y grid of points for the 2D flow map shown at the top of the page. 
 
 ## Back to 2D flow
 
-Lets compare the 1-point (midpoint) and 2-point Gauss  
-"""
+Let’s compare the midpoint rule to Gauss quadratures
 
-# ╔═╡ 9eeaf154-bd59-48c4-b8ac-b758dc044bf9
-md"n $nslide"
+n $nslide
+"""
 
 # ╔═╡ c380ce87-810a-4d54-a0ea-0b3c240b53bf
 begin
-	scatter(middle,midpoint.(G,lower,upper)-exact,label="Midpoint rule",yscale=:log10,ylabel="quadrature error")
-	scatter!(middle,quadgl.(G,lower,upper)-exact,label="Gauss rule n=$n")
+	plot(yscale=:log10,ylabel="quadrature error",xlabel="x")
+
+	midpoint_error = midpoint_vals .- exact_vals # broadcast is nice here
+	scatter!(m,midpoint_error,label="Midpoint rule")
+
+	quadgl_error = quadgl.(G,a,b) .- exact_vals # broadcast again
+	scatter!(m,quadgl_error,label="Gauss rule n=$n")
 end
 
 # ╔═╡ b90bcba2-530f-4af4-b176-4c2111a8738a
@@ -338,23 +346,23 @@ The results look almost perfect other than the panel with the singularity!
 
 ### Activity
 
-Check how this error changes with the number of Gauss points. 
+Check how this error changes with the number of Gauss points.
 
 - Does the error drop as fast as the theory indicates?
  - What does `n=1` give you?
 
 ## Numerical Derivatives
 
-We also need to take derivatives of $G$ and other functions in our panel method. Should we 
+We also need to take derivatives of $G$ and other functions in our panel method. Should we
  1. Try to hand-calculate the derivatives and code them without messing up
  2. Use finite differences and accept surprisingly big numerical errors
  3. Let the computer determine the analytic derivatives for us
 
-The third option sounds magical at first, but the derivative rules such as the chain rule 
+The third option sounds magical at first, but the derivative rules such as the chain rule
 
 $\mathbf{d}(f(g(x))) = \mathbf{d}f(g(x))\ \mathbf{d}g(x)$
 
-are very simple algorithms. Letting the computer apply these rules for you is called [automatic differentiation](https://www.ams.org/publicoutreach/feature-column/fc-2017-12) or AutoDiff. Another huge reason to use Julia is that **all Julia code is differentiable**. 
+are very simple algorithms. Letting the computer apply these rules for you is called [automatic differentiation](https://www.ams.org/publicoutreach/feature-column/fc-2017-12) or AutoDiff. Julia's great type dispatching mentioned above means that **all Julia code is differentiable**.
 
 Let's test out all three options on our 2D source example:
 """
@@ -373,13 +381,13 @@ end
 md"""
 The finite difference results are surprisingly bad! We've used the smallest step possible, but we have not converged to the analytic derivative produced by the other two methods. This is a second type of numerical error:
 
-|Type 4: Floating Point Arithmetic Error|
+|Type 4: Floating-Point Arithmetic Error|
 |:---:|
 |Errors due to representing real numbers with a finite precision binary number|
 """
 
 # ╔═╡ ecf9dcac-02a8-4981-bc28-d18463f0f78b
-begin 
+begin
 	plot(10 .^(-16:0.25:-1),h->abs(dG_finite(0.2;h)-dG_hand(0.2)),label=false,
 		yscale=:log10,ylabel="Finite difference error",xscale=:log10, xlabel="h")
 	plot!([1e-15,1e-6],[1e-1,1e-10],label="floating point error trend",ls=:dash)
@@ -388,22 +396,22 @@ end
 
 # ╔═╡ c7ff9333-8bc0-4cae-9cb9-0bc94081aedf
 md"""
-While a [double-precision number](https://en.wikipedia.org/wiki/Floating-point_arithmetic) (the Julia default) has sufficient accuracy for our panel code, the finite differences become unstable due to rounding over small intervals. In the plot above, you can see the balance between truncation errors and floating point errors over a wide range of finite difference step sizes $h$.
+While a [double-precision number](https://en.wikipedia.org/wiki/Floating-point_arithmetic) (the Julia default) has sufficient accuracy for our panel code, the finite differences become unstable due to rounding over small intervals. In the plot above, you can see the balance between truncation errors and floating-point errors over a wide range of finite difference step sizes $h$.
 
 In contrast, AutoDiff generates functions for the **analytic derivative** automatically. This avoids both types of numerical errors shown above. It also avoids common *human errors*, such as mistakes in our hand calculation and bugs in our implementation.
 
 |Type 5: Human Error|
 |:---:|
-|Mistakes in the developement or use of a prediction method|
+|Mistakes in the development or use of a prediction method|
 
-We will use AutoDiff where ever possible in this code.
+We will use AutoDiff wherever possible in this code.
 """
 
 # ╔═╡ 5742ada4-97bf-4d37-be37-29989b8859de
 md"""
 ## 2D flow example
 
-Let's put the tools together to plot the flow induced by a 2D panel. If you change the Gauss points, the result will adjust slightly. 
+Let's put the tools together to plot the flow induced by a 2D panel. If you change the Gauss points, the result will adjust slightly.
 """
 
 # ╔═╡ 27a974a0-de5c-4ed2-b6ba-bcb0f51f7381
@@ -421,10 +429,9 @@ md"n $nslide"
 begin
 	Np = 16; line = range(-5,5,Np)
 	X = line*ones(Np)'    # X is a [Np,Np] matrix
-	Y = one(Np)*line'     # same
 	U = dφdx.(line,line') # broadcasts to [Np,Np]
 	V = dφdy.(line,line') # same
-	plt = quiver(X,Y,quiver=(U,V),xlims=(-6,6),ylim=(-6,6),size=(500,500))
+	plt = quiver(X,X',quiver=(U,V),xlims=(-6,6),ylim=(-6,6),size=(500,500))
 	plot!([pxc-pxh/2,pxc+pxh/2],[py,py],color=:black,label=nothing)
 end
 
@@ -1701,21 +1708,24 @@ version = "1.4.1+2"
 # ╟─9b6b5d2b-a2f1-4378-9ae3-a9de62912d56
 # ╠═13634eb0-c8c2-11ee-265a-3b3b61815eb0
 # ╠═e1319af7-e552-48d7-bd91-4ea65c5adb17
-# ╟─d377f6bd-c169-45b0-b356-7eb69712e9e9
+# ╟─c40af00e-43e9-448e-b45c-ffc94c8d09f8
+# ╠═9d9c5f07-0db9-4547-a817-db55211d729f
+# ╠═d377f6bd-c169-45b0-b356-7eb69712e9e9
 # ╠═48490cb3-c252-4165-b7de-88c2077160bb
+# ╠═0192f438-5b07-4bcc-863c-0580e0868a77
 # ╠═966fc702-dcff-4568-8b0b-f8e8eb750150
+# ╟─f25ba1ea-ddaf-474e-8298-59b82a2a2023
 # ╠═dfd90e9a-00d2-46ee-89ed-9508394e0ea2
 # ╟─72854972-c07a-4201-b6ea-7e75c2b06f1c
 # ╠═7ffb2853-4b1e-4434-9ef3-5dbffdad2cd2
 # ╠═218ac5ff-a6a8-43b8-bfb4-c707af4592a3
 # ╠═5a072d68-721a-420b-924f-4f9c0054b2f5
+# ╠═92b31060-b3b8-43e2-a294-513237a46e7d
 # ╠═910cb09e-1214-480e-8b2a-15df3c49109d
-# ╟─c40af00e-43e9-448e-b45c-ffc94c8d09f8
-# ╠═9d9c5f07-0db9-4547-a817-db55211d729f
 # ╟─39b1dd25-2b26-4bba-a6ae-74cd0d8e6258
-# ╠═530b5720-aee1-4e2c-90f4-d2205d46718f
 # ╠═a22843d9-7482-41b4-8135-7904bd4ba28d
 # ╠═f38e4dbe-6b5e-4dc6-8565-8e4ad23dcfa3
+# ╟─530b5720-aee1-4e2c-90f4-d2205d46718f
 # ╟─df681b66-5ccd-4b21-ac48-d3f6ef6b80d9
 # ╟─22fc08d3-a755-4dcb-8807-d706dc263a4b
 # ╟─e828c1e4-4c72-4bfa-8af9-0007101b56e2
@@ -1728,21 +1738,14 @@ version = "1.4.1+2"
 # ╠═c5af3969-ff3f-43c5-b532-4e70bdf5cfef
 # ╟─2f5e8100-d212-4cae-b8e9-67c633f555d9
 # ╠═33295048-2c6a-4a08-bb2b-2c7dcb6d7421
-# ╟─c48e953e-178b-4bf8-ab58-9aaa6bfae1ff
-# ╠═cc086099-18c8-474e-a0fa-1d0dbfa6b82c
-# ╠═c57279a7-0a28-4872-b14d-8a634f3253d7
+# ╠═55b536da-1666-4831-8f95-d92694c51a93
 # ╟─a397cafe-3e42-41d8-8576-9d304c7dbee6
 # ╠═97682af1-bebc-49a2-9d5f-ad0acf7ddd34
 # ╠═886562c5-0f42-4d26-9a98-5632281f05d8
 # ╠═150ffade-4b10-4579-a4fa-41db4a820484
 # ╠═1e544266-358e-4b8a-8856-7ef07c538b75
+# ╟─b3e77311-7aa3-4e0d-8be2-54b305da0a70
 # ╟─4cef9215-1301-4581-8ed1-1bea4fb3dfe9
-# ╠═bda29531-6902-42a9-b3c2-92b0e5a5547b
-# ╠═dfe20f1c-b4ef-429b-a20c-7495d131b317
-# ╠═47578e40-c922-4475-9e78-e82e21e03243
-# ╠═3592f424-bee5-4a64-a159-b302824f7f35
-# ╟─b6d91d56-9e69-4619-b231-7b844339131c
-# ╟─9eeaf154-bd59-48c4-b8ac-b758dc044bf9
 # ╟─c380ce87-810a-4d54-a0ea-0b3c240b53bf
 # ╟─b90bcba2-530f-4af4-b176-4c2111a8738a
 # ╠═3cd0a074-1b6e-4249-8472-7798e8ce5f96
