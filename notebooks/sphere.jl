@@ -191,7 +191,7 @@ We got the solution to the linear system we created, but was that the right syst
 
 > 4. _How should we determine if a method is working?_
 
-As a first *sanity check*, we can plot the flow around the sphere. First we need to implement the equation for the total potential $\Phi(x)=\sum q_i φ_i(x)$, and the velocity $\vec u=\vec \nabla\Phi$. Then we can plot the flow at any point.
+As a first *sanity check*, we can plot the flow around the sphere. First we need to implement the equation for the total potential $\Phi(x)=\sum q_i φ_i(x)$, and the velocity $\vec u=\vec U+\vec \nabla\Phi$. Then we can plot the flow at any point.
 
 Below I show the flow on the $z=0$ slice through the **3D** potential flow solution.
 """
@@ -261,9 +261,9 @@ Not bad, but there is some error.
  - Discuss: what type of error is this?
  1. System description
  2. Modelling
- 3. Truncation
- 3. Finite precision
- 3. Human
+ 3. Discretization
+ 4. Finite precision
+ 5. Human
  - Confirm/refute your theory by adding to the code above.
 """
 
@@ -300,7 +300,7 @@ end
 md"""
 Since we've scaled by the solution, the result _should_ be the identity matrix. It's _really_ close, but there is some error.
 
-#### Actitivity:
+#### Activity:
  - Write a function `sphere_ma_error(h)` which uses `LinearAlgebra: norm,I` to compute the `addedmass` error.
  - Make a plot of $h/R$ vs the error. Is the code validated?
  - Use the @time macro to determine how long each simulation takes as a function of h.

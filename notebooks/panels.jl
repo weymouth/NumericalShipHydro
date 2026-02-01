@@ -192,7 +192,7 @@ md"""
  - Add one of the other rules and compare the results.
  - Try plotting the error instead of the value.
 
-## Truncation error
+## Discretization error
 
 We can predict the performance of quadratures by expressing $f$ in terms of its Taylor series
 
@@ -203,11 +203,11 @@ where the subscript $0$ denotes evaluation at $x=0$, and each prime `$'$` indica
  - trapezoidal: $F = \frac h2 [f(-h/2)+f(h/2)] -\frac 1{12}h^3 f_0''+O(h^4)$
  - Simpson's: $F = \frac h6 [f(-h/2)+4f(0)+f(h/2)] + O(h^4)$
 
-where $O(h^4)$ means the remaining terms are proportional to $h$ to the forth or higher power. Since the quadrature neglected these additional terms, they have a well-defined _truncation error_.
+where $O(h^4)$ means the remaining terms are proportional to $h$ to the forth or higher power. Since the quadrature neglected these additional terms, they have a well-defined _discretization error_.
 
-|Type 3: Numerical truncation error|
+|Type 3: Discretization error|
 |:---:|
-|Errors due to truncating an infinite series at some power of the step length $h$|
+|Errors due to truncating an infinite series at a finite number of terms. Additional discretization errors arise from using highly non-uniform panel sizes and shapes in 3D.|
 
 Unlike system description errors or modelling errors, numerical truncation errors can be well estimated and controlled without access to the "true" result.
  - As long as the function is smooth, a small value of $h$ will make $h^3 f''$ negligible.
@@ -398,11 +398,11 @@ end
 md"""
 While a [double-precision number](https://en.wikipedia.org/wiki/Floating-point_arithmetic) (the Julia default) has sufficient accuracy for our panel code, the finite differences become unstable due to rounding over small intervals. In the plot above, you can see the balance between truncation errors and floating-point errors over a wide range of finite difference step sizes $h$.
 
-In contrast, AutoDiff generates functions for the **analytic derivative** automatically. This avoids both types of numerical errors shown above. It also avoids common *human errors*, such as mistakes in our hand calculation and bugs in our implementation.
+In contrast, AutoDiff generates functions for the **analytic derivative** automatically. This avoids both types of numerical errors shown above. It also avoids a common type of *human error*, mistakes in our hand calculation and bugs in our implementation.
 
-|Type 5: Human Error|
+|Type 5A: Human Implementation Error|
 |:---:|
-|Mistakes in the development or use of a prediction method|
+|Mistakes in the analytic or algorithmic development of a prediction method.|
 
 We will use AutoDiff wherever possible in this code.
 """
