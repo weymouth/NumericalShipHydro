@@ -13,9 +13,6 @@ begin
 	ϕ = ∫G # panel potential function
 end
 
-# ╔═╡ d8fdb518-b039-4dae-87d2-f471100cda43
-using NeumannKelvin:panelize
-
 # ╔═╡ 89ec7c70-c0cf-4bef-8e32-9dc4b2df91f4
 md"""
 # Numerical Panel Methods 🚢
@@ -60,7 +57,7 @@ function sphere(h,R=1)
 end
 
 # ╔═╡ ceaa01da-9fba-454f-8a98-a13874f72295
-h,R = 0.5,1.; panels = sphere(h,R); display(panels)
+h,R = 0.4,1.; panels = sphere(h,R); display(panels)
 
 # ╔═╡ 71df011e-bf21-47c3-85f0-18a9aca54fee
 md"""
@@ -86,7 +83,9 @@ Let's start by plotting the centroids.
 begin
 	# Split the centroids (`panels.x`) into  `x,y,z` vectors for plotting
 	x,y,z = components(panels.x)
-	plot(x,y,z,legend=false,title="Sphere represented with $(length(panels)) panels")
+	plot(x,y,z,legend=false,width=2,
+		title="Sphere represented with $(length(panels)) panels")
+	# scatter!(x,y,z,marker_z=panels.dA,legend=false)
 end
 
 # ╔═╡ 44da77a5-8fbc-40f8-a3c5-1006295dd59e
@@ -116,7 +115,7 @@ md"""
 
 The potential of the full sphere is simply the superposition of each panel's contribution,
 
-$\Phi(x) = \sum_{i=1}^N q_i \varphi_i(x)$
+$\Phi(\vec x) = \sum_{i=1}^N q_i \varphi_i(\vec x)$
 
 where $N$ is the number of panels, $q$ is the vector of **unknown** panel strengths and $\varphi_i$ is the influence of panel $i$.
 
@@ -129,25 +128,27 @@ Our panel potential $\varphi_i$ uses a source as its Green's function $G=-1/r$. 
 md"""
 ## Apply boundary conditions
 
-The additional equations from our problem description are the boundary conditions. Defining $\vec U$ as the free stream velocity and $\hat n$ as the surface normal, the conditions in an infinite fluid (no free surface) are
- - Flow tangency on the solid body's surface: $U_n+u_n = U_n+\frac{\partial\Phi}{\partial n}=0$
- - No disturbance far from the body: $u(\infty)\rightarrow 0$
+We will determine the strength `q` of each panel such that the flow through all the panels is zero.
 
-The second condition is achieved automatically since $u(r) \sim \frac{\partial G}{\partial r} = 1/r^2$. Therefore, the first condition must be used to set $q$.
+Defining $\vec U$ as the free stream velocity vector, the total potential flow velocity is 
+
+$\vec u(x) = \vec U + \vec\nabla\Phi(x)$
+
+Defining $\hat n$ as the outward facing normal of each panel, the body boundary condition is that $\vec u(x) \cdot \hat n = 0$. Substituting the velocity equation gives
+
+$\vec U \cdot \hat n + \vec\nabla\Phi(\vec x) \cdot \hat n = 0 \quad\rightarrow\quad \frac{\partial\Phi(\vec x)}{\partial n} = -\vec U \cdot \hat n$
+
+This is a [Neumann condition](https://en.wikipedia.org/wiki/Neumann_boundary_condition#PDE) for $\Phi$ because it specifies the *derivative* of the potential at the body surface.
 
 Substituting the equation for $\Phi$ into the body BC, we have
 
-$\vec U \cdot \hat n + \sum_{j=1}^N \frac{\partial\varphi_j}{\partial n} q_j = 0 \quad\forall\ \vec x \in S$
+$\sum_{j=1}^N q_j \frac{\partial\varphi_j}{\partial n}(\vec x)= -\vec U \cdot \hat n \quad\forall\ \vec x \in S$
 
-This boundary condition is linear in $q$ and applies to every point on the body surface $S$. Applying the boundary condition at $N$ specific locations will create $N$ linear equations of the $N$ unknown components of $q$. We will choose the centroid of each panel $p_i$ to apply this condition. Defining
+Applying this equation at the centroid of each panel $p_i$ defines a linear system of equations for the N unknown $q_j$ strengths. Defining the coefficients
 
-$a_{ij} = \frac{\partial\varphi_j}{\partial n_i}, \quad b_i = -\vec U \cdot \hat n_i$
+$a_{ij} = \frac{\partial\varphi_j}{\partial n_i}(\vec x_i), \quad b_i = -\vec U \cdot \hat n_i$
 
-as the components of the influence matrix $A$ and the excitation vector $b$, we have
-
-$\sum_{j=1}^N a_{ij} q_j = b_i \quad i=1\ldots N$
-
-or simply $Aq = b$. Meaning that once we construct `A` and `b`, we simply use `q = A\b`.
+our linear system is `A*q = b` and the solution is easily obtained using "left division" `q = A \ b`.
 """
 
 # ╔═╡ e5ce94d5-5fdc-44d3-9009-6455624e9244
@@ -158,7 +159,7 @@ begin
 	# Construct A matrix
 	A = [∂ₙϕ(pᵢ,pⱼ) for pᵢ in panels, pⱼ in panels]
 
-	# Construct b = -Uₙ = -U⋅n̂
+	# Construct b = -U⋅n̂
 	U = SA[-1,0,0]; b = [-U ⋅ n for n in panels.n]
 
 	# solve & check that it worked
@@ -176,8 +177,8 @@ This is a complete panel method! In four lines of code!!
  - Take a look at the code below to see how long each step takes. Do you see something surprising?
 """
 
-# ╔═╡ d635c8fd-5839-4fdf-8443-6b1e594a3042
-@time ∂ₙϕ.(panels,panels') # how long does this take?
+# ╔═╡ d25fa669-81af-46bc-ae20-70b1a5db2465
+@time broadcast(∂ₙϕ,panels,panels') # how long does this take?
 
 # ╔═╡ 4ea96c89-e8ac-4f29-bc20-8034fdfe0c08
 @time A \ b # how long does this take?
@@ -198,7 +199,7 @@ Below I show the flow on the $z=0$ slice through the **3D** potential flow solut
 # ╔═╡ d0cc0f66-f871-417a-90d9-8aea80cc3f30
 begin
 	# Functions to compute disturbance potential and velocity
-	Φ(x,q,panels) = q'*[ϕ(x,p) for p in panels]   # sum over all panels
+	Φ(x,q,panels) = sum(qᵢ*ϕ(x,pᵢ) for (qᵢ,pᵢ) in zip(q,panels)) 
 	∇Φ(x,q,panels) = gradient(ξ->Φ(ξ,q,panels),x) # AutoDiff
 end
 
@@ -230,9 +231,9 @@ where $\alpha$ is the angle of the surface point with respect to the flow direct
 """
 
 # ╔═╡ 708e7a92-95d0-43af-9805-047399dc38a3
-begin
+let
 	function sphere_velocity!(panels,U=SA[-1,0,0])
-		# set-up and solve the system of equations
+		# set up and solve the system of equations
 		A = [∂ₙϕ(pᵢ,pⱼ) for pᵢ in panels, pⱼ in panels]
 		b = [-U ⋅ n for n in panels.n]
 		q = A\b
@@ -246,10 +247,10 @@ begin
 	end
 
 	# start the plot with the exact solution
-	plot(0:0.01:π,x->1.5sin(x),label="exact",xlabel="α",ylabel="uₐ")
+	plot(0:0.1:π, x->1.5sin(x), label="exact",xlabel="α",ylabel="uₐ")
 
 	# run the function to add numerical data to the plot
-	sphere_velocity!(sphere(0.4))
+	sphere_velocity!(panels)
 end
 
 # ╔═╡ 3fcfafb1-e71e-4965-85bc-e2fdaac46778
@@ -272,7 +273,7 @@ md"""
 
 We can further quantify the panel method's error by computing a relevant **integrated quantity**. The added mass matrix $M$ is a good choice for potential flows since the force due to accelerating a body in potential flow is $\vec f = M \vec a$ and it tests all three flow directions. The components of the matrix are defined as
 
-$m_{i,j} = -\rho\oint \tilde\Phi_i n_j \text{d}a$
+$m_{ij} = -\rho\oint_S \tilde\Phi_i n_j \text{d}a$
 
 where $\rho$ is the fluid desity and $\tilde\Phi_i$ is the scaled potential resulting from unit velocity in direction $i$.
 
@@ -280,23 +281,24 @@ The analytic solution for a sphere is $\frac 12 ρV = \frac 23 \rho \pi R^3$ on 
 """
 
 # ╔═╡ 00965cd1-b233-42f7-8a6d-1688175cac1e
-begin
-	function addedmass(panels;ρ=1)
-		# set-up and solve the system of equations
-	    A = [∂ₙϕ(pᵢ,pⱼ) for pᵢ in panels, pⱼ in panels]
-	    B = stack(panels.n) # all three excitations
-	    Q = A\B'            # solve for all three q's
+begin	
+	# form the matrix by stacking rows
+	function addedmass(panels)
+	    A = [∂ₙϕ(pᵢ,pⱼ) for pᵢ in panels, pⱼ in panels] # form A once
+		stack(addedmass(i,A,panels) for i in 1:3)       # stack rows
+	end
 
-		# measure added mass
-		contribution(p) = Φ(p.x,Q,panels)*p.n'*p.dA
-		-ρ .* sum(contribution(p) for p in panels)
+	# row i is the reaction force vector due to motion in direction i
+	function addedmass(i,A,panels)
+		qᵢ = A\components(panels.n,i)                   # bᵢ = i ⋅ n
+		-sum(Φ(p.x,qᵢ,panels)*p.n*p.dA for p in panels) # integrate reaction
 	end
 	addedmass(panels)/(2π/3) # scale by exact solution
 end
 
 # ╔═╡ 1495dcb8-104f-41ff-a988-5abdca975248
 md"""
-Since we've scaled by the solution, the result _should_ be the identity matrix, but there is some error.
+Since we've scaled by the solution, the result _should_ be the identity matrix. It's _really_ close, but there is some error.
 
 #### Actitivity:
  - Write a function `sphere_ma_error(h)` which uses `LinearAlgebra: norm,I` to compute the `addedmass` error.
@@ -311,16 +313,16 @@ md"""
 ## Summary
 
 This notebook develops a 3D potential flow panel method and tests its predictions. The procedure had three parts:
- - We used the parametric equation for a sphere to generate panels data.
- - We used the normal velocity boundary condition to develop a set of linear equations for the strength of each panel.
- - We used the solution to measure the velocity on the panels, and the added mass matrix.
+ - We used the parametric equation for a sphere to generate a set of panels.
+ - We used the Neumann boundary condition to develop a linear system equations and solve for the strength of each panel.
+ - We used the solution to measure the velocity on the panels and the added mass matrix.
 
 We were careful to visually and quantitatively check our intermediate results **at every step along the way**
- - We plotted the geometry and verified that every panel $dA\sim h^2$ and the total $A\approx 4\pi$.
- - We plotted the flow and visually checked that the boundary conditions were enforced.
- - We compared to the analytic solution for the sphere's surface velocity magnitude and added mass, and demonstrated the numerical convergence with $h$.
+ - We plotted the geometry and verified that every panel $dA\sim h^2$ and the total $A\approx 4\pi$. _However, we found the panel area near the poles goes to 0 much faster than at the equator!_
 
-The same three-part procedure and careful verification and validation will be present for every example we use in this class (and hopefully in your work in the future as well).
+ - We compared to the analytic solution for the sphere's surface velocity and added mass, and demonstrated the numerical convergence with $h$. _However, the uneven panelization near the poles led to large local errors._
+
+Next time we will try to address this panelization issue and streamline the 3-step prediction process.
 """
 
 # ╔═╡ 9574fedd-8bc8-4363-8d46-c967d046573e
@@ -1942,7 +1944,6 @@ version = "1.13.0+0"
 # ╔═╡ Cell order:
 # ╟─89ec7c70-c0cf-4bef-8e32-9dc4b2df91f4
 # ╠═75e7931e-aa95-4f30-8117-7b15c9344dbd
-# ╟─d8fdb518-b039-4dae-87d2-f471100cda43
 # ╟─a899175c-85fd-46ed-bd3a-b30c1e97c9d6
 # ╠═0576ce9d-dd33-4b20-915a-24421037d7c0
 # ╟─71df011e-bf21-47c3-85f0-18a9aca54fee
@@ -1956,7 +1957,7 @@ version = "1.13.0+0"
 # ╟─1719d47e-5861-481a-8398-84c92e58fbb1
 # ╠═e5ce94d5-5fdc-44d3-9009-6455624e9244
 # ╟─588973eb-1b69-4a3d-83c0-69ad1a1e6972
-# ╠═d635c8fd-5839-4fdf-8443-6b1e594a3042
+# ╠═d25fa669-81af-46bc-ae20-70b1a5db2465
 # ╠═4ea96c89-e8ac-4f29-bc20-8034fdfe0c08
 # ╟─6d5d2289-15df-47ba-82ff-2d5bf18627de
 # ╠═d0cc0f66-f871-417a-90d9-8aea80cc3f30
