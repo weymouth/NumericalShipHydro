@@ -7,10 +7,13 @@ using InteractiveUtils
 # ╔═╡ 6aa38485-f860-4834-ac8b-7a7761fa26e0
 using NeumannKelvin, WGLMakie
 
+# ╔═╡ bc18b179-7c98-4aed-979c-7b7233a24811
+using NeumannKelvin:ζ,onwaterline
+
 # ╔═╡ be6dec6f-2a55-4f8c-8852-52830656c062
 md"""
 
-# Linear free surface waves and forces on a submerged spheroid
+# Linear free surface waves and forces
 
 We now have three methods for linear free surface simulations:
 
@@ -18,28 +21,37 @@ We now have three methods for linear free surface simulations:
 1. FS panel system: source Green's function with the Neumann-BC applied to the body panels and the linear FSBC applied to the free surface mesh.
 2. NK panel system: Kelvin Green's function and Neumann-BC applied to body panels.
 
-We'll compare all three approaches in this notebook, using a submerged spheroid as a validation case.
+We'll compare all three approaches in this notebook, using a submerged spheroid and the Wigley hull as validation cases.
 
-> Multiple previous studies have used this geometry. Havelock and Farell conducted analytic studies, while Baar and Price and many others used panel methods. We'll compare to these references below.
+> Multiple previous studies have used these geometries. Havelock and Farell conducted analytic studies on the spheroid, while Baar and Price and many others used panel methods for both. We'll compare to these references below.
 
 """
 
 # ╔═╡ 7c9265d4-0bca-4f50-af24-b4c49fab0280
 begin
-	function submarine(h;r=1/12,Z=-1/8)
+	function submarine(hᵤ,hᵥ=hᵤ;r=1/12,Z=-1/8,devlimit=0.03)
 		S(θ₁,θ₂) = SA[0.5cos(θ₁),-r*sin(θ₂)*sin(θ₁),r*cos(θ₂)*sin(θ₁)+Z]
-		panelize(S,0,π,0,π,hᵤ=h,hᵥ=h/2)
+		panelize(S,0,π,0,π;hᵤ,hᵥ,devlimit) # half-body
 	end
-	h = 1/20; body = submarine(h)
-	viz(body,2body.dA/h^2,label="dA/h²",vscale=0.5)
+	h = 1/20; sub = submarine(h)
+	viz(sub,sub.dA/h^2,label="dA/h²",vscale=0.5)
 end
 
-# ╔═╡ e3bb8c3e-af31-491a-a4de-03c374bd79d5
-length(body)
+# ╔═╡ 040b5016-95c6-49c9-b376-1f5ad2be00c8
+begin
+	function wigley(hᵤ,hᵥ=hᵤ/2;B=1/10,D=1/16)
+	    S(u,v) = SA[u-0.5,-2B*u*(1-u)*(v)*(2-v),D*(v-1)]
+	    panelize(S;hᵤ,hᵥ)
+	end
+	B = 1/10; demihull = wigley(h/2;B)
+	viz(demihull,demihull.dA/(h/2)^2,label="dA/h²",vscale=0.2)
+end
 
 # ╔═╡ 5396139c-4bdd-4634-a3c6-c83845f514dc
 md"""
-We've made a half-body to exploit the y-symmetry. The area drops to 0.2h² at the poles, since the curvature is larger there than at the midbody. Looks fine.
+I made a half-bodies to exploit the y-symmetry. 
+ - The spheroid curvature is much stronger at the poles, so I've reduced the deviation limit to 2% to keep the panels accurate and smoothly varying. The area transitions from 0.1-0.6h² and it looks fine. 
+ - The Wigley hull doesn't have any curvature, but we need to capture the flow's variation with `z`, _without_ using high-aspect ratio panels. I've set the default aspect ratio to 2:1 and doubled the resolution compared to the spheroid so we can get at least 5 panels in `z`.
 """
 
 # ╔═╡ 416fde17-16ba-4a29-a910-7f9609243bfd
@@ -50,7 +62,7 @@ Let's start by looking at the double-body prediction using `BodyPanelSystem`. We
 """
 
 # ╔═╡ 345b1774-b323-4b48-99d5-2911f25acdde
-sys = BodyPanelSystem(body,sym_axes=(2,3)) |> directsolve!
+sys = BodyPanelSystem(sub,sym_axes=(2,3)) |> directsolve!
 
 # ╔═╡ 32052bb1-6d68-42ce-9c9a-6a9e36fc52c8
 viz(sys,vectors=nothing,colorrange=(-0.2,0.2)) # measure
@@ -76,24 +88,24 @@ where `S` defaults to the body's surface area. See the docs.
 
 ## FSPanelSystem
 
-For our first free-surface simulation, we can define a `FSPanelSystem` with panels on both `body` and `freesurf`, and the Froude length `ℓ ≡ U²/g` for the FSBC and use GMRES to solve.
+For our first free-surface simulation, we can define a `FSPanelSystem` with panels on the `body`, the Froude length `ℓ ≡ U²/g` for the FSBC, and `freesurf` panels *covering the free surface.* Luckily, covering the $z=0$ plane with panels is easy. The parametric surface is simply  $P_0(u,v) = [u,v,0]$! 
 
-> The `directsolve!` only applies the Neumann BC on `body`, while `gmressolve!` can apply both the Neumann BC on `body` and the FSBC on `freesurf`.
+The code below does the set up for `freesurf`, creates the `FSPanelSystem` and uses GMRES to solve.
+
+> The `gmressolve!` function can apply both the Neumann BC on `body` and the FSBC on `freesurf`. `directsolve!` has only implemented the Neumann BC.
+
 """
 
 # ╔═╡ e096e3c7-85ad-49b2-b640-7aea706ca07a
 begin
-	# Froude-length and freesurf spacing
-	ℓ = 1/4; hfs = 0.3ℓ
-
-	# Make the free-surface mesh using y-symmetry and resolving ℓ
-	freesurf = measure.((u,v)->SA[u,-v,0],2:-hfs:-4,(-2:hfs:-hfs/2)',hfs,hfs)
-
-	# FreeSurfacePanelSystem
-	FSsys = FSPanelSystem(body,freesurf;ℓ,sym_axes=2,θ²=16)
-
-	# solve using GMRES
-	gmressolve!(FSsys,itmax=150) # don't let it run forever!
+	P₀(u,v) = SA[u,v,0] # z=0 plane
+	ℓ = 1/4             # Froude-length
+	FSsys = let
+		h = 0.3ℓ # spacing must resolve ℓ
+		freesurf = [measure(P₀,u,v,h,h,flip=true) for u in 2:-h:-4, v in h/2:h:2]
+		sys = FSPanelSystem(sub,freesurf;ℓ,sym_axes=2,θ²=16)
+		gmressolve!(sys,itmax=150) # don't let it run forever!
+	end
 end
 
 # ╔═╡ c5f6043c-9c38-4e42-a680-10980455421d
@@ -135,7 +147,7 @@ Let's see!
 """
 
 # ╔═╡ 6d838bc0-f464-4dde-a897-cb9a9535af45
-NKsys = NKPanelSystem(body;ℓ,sym_axes=2) |> directsolve!
+NKsys = NKPanelSystem(sub;ℓ,sym_axes=2) |> directsolve!
 
 # ╔═╡ 6cdb8bee-2c2d-4109-8df8-a08525bfbfaf
 md"> Note that you can't use `PanelTree` for NKPanelSystems. The wavelike Green's function doesn't decay homogeneously, so a simple distance-based cutoff won't be remotely accurate. That's another reason we spent so much effort optimizing in the previous notebook."
@@ -151,8 +163,7 @@ md"""
 That was... easy! Basically no harder than dealing with a `BodyPanelSystem`.
 
 ### Activity
- - Compare the strength extrema for the three solutions. Do they all match? Why or why not?
- - Compare the forces and wave fields for the two free surface simulations. Which one would you guess is more accurate and why?
+ - Compare the forces and wave fields for the two free surface simulations. Do they all match? Which one would you guess is more accurate and why?
  - Rerun the solver to clear the compile time and compare the run time for the three methods. Do they match what you anticipated? How do the times scale when you change the resolution a little?
 
 ## Convergence and Validation
@@ -190,11 +201,12 @@ Finally, let's check how our wave drag force depends on Froude number.
 """
 
 # ╔═╡ dc6bcf00-8191-4168-82de-1cd2d8b4666b
-dataFn = map(0.3:0.025:0.8) do Fn
-	sys = NKPanelSystem(body,ℓ=Fn^2,sym_axes=2) # constant geom, new ℓ
-	directsolve!(sys,verbose=false)             # solve
-	drag = -steadyforce(sys,S=1)[1]             # measure force, scaled by S=L²
-	(;Fn,drag)                                  # save
+subFn = map(0.3:0.025:0.8) do Fn
+	ℓ = Fn^2                               # submersible length L=1
+	sys = NKPanelSystem(sub;ℓ,sym_axes=2)  # constant geom, new ℓ
+	directsolve!(sys,verbose=false)        # solve
+	drag = -steadyforce(sys,S=1)[1]        # measure force, scaled by S=L²
+	(;Fn,drag)                             # save
 end|> Table;
 
 # ╔═╡ ab77f9cd-92e5-47da-b8f8-9ac6743134cb
@@ -202,7 +214,7 @@ let
 	fig = Figure()
 	ax = Axis(fig[1,1],xlabel="Fn", ylabel="10³ Cw",
 			  limits=(nothing,(0,3.5)))
-	plot!(ax,dataFn.Fn,1000*dataFn.drag)
+	plot!(ax,subFn.Fn,1000*subFn.drag)
 	fig
 end
 
@@ -212,11 +224,174 @@ md"""
 Here is a plot from Baar and Price (1986), for (coincidentally) the same Z/L and r/L ratios. Note that they scaled the drag integral by $\rho U^2 L^2$ instead of $\frac 12 \rho U^2 S$, so I adjusted our scaling to compare them.
 ![](https://raw.githubusercontent.com/weymouth/NumericalShipHydro/9349f0512fe3ee3a1164d8e0ef6e8fda71f3899d/Baar_1982_prolate_spheroid.png)
 
-As you can see, our results match the analytic solution and previous Neumann-Kelvin simulation results extremely well!
+As you can see, our results match the analytic solution and previous Neumann-Kelvin simulation results quite well. It seems like our peak is slightly wider than the analytic solution, but only by a few percent.
 
 ### Activity
- - Have we validated the linear free surface code?
- - What additional tests should we do?
+ - Why is the drag zero below Fn=0.3? How does that change with submersible depth?
+ - Add a few points to the Froude number sweep above using `FSPanelsystem`. You need to make sure the free surface grid resolves the waves, `h=0.3ℓ` is a good rule-of-thumb. 
+
+"""
+
+# ╔═╡ 3894ece3-1224-44f0-b8bb-744502fc9254
+md"
+## Ship simulations
+
+There are some technical problems when simulating ships. We noticed how rough the Kelvin Green's function free surface elevation was in the last notebook. I've put the details in an Appendix you can look through at the end of the notebook.
+
+Let's go ahead and predict the Wigley hull solution with our three methods. We've already seen the double-body solution:
+"
+
+# ╔═╡ 28e66fff-ed81-4b0f-b5d1-942d56b0be16
+sysw = BodyPanelSystem(demihull,sym_axes=(2,3)) |> directsolve!
+
+# ╔═╡ d032aff3-ff91-4f80-ba47-2dca245944e8
+viz(sysw,vectors=nothing)
+
+# ╔═╡ 5a9269d7-e843-4017-b65c-f5e4b148b027
+addedmass(sysw)[1] # surge added mass instead of drag
+
+# ╔═╡ ae8e281d-9f40-4f3a-a85f-fe767d218116
+md"Notice again that the Wigly hull has such a fine box, that there is no stagnation point: `cₚ<1` even at the bow. The surge added mass is only 2% of the displaced mass.
+
+Next is `FSPanelSystem`. The big issue here is that we don't want the body and free surface panels to intersect if we can help it. In this case, it's pretty easy to deform the mesh around the Wigley hull.
+"
+
+# ╔═╡ 03b0ad21-cc6d-4c28-8ce7-2af4d4b152d4
+begin
+	# Define a plane that conforms to the Wigley waterline
+	function Pη(u,v)
+		(u>0.5 || u<-0.5) && return P₀(u,v)
+		η = -2B*(u+0.5)*(u-0.5) # waterline
+		P₀(u,(1-v)*η+v*(1-η))   # start at y=η instead of y=0
+	end
+
+	# Define the Fn and the corresponding FS-system
+	Fn = 0.313
+	FSsysw = let # define inputs locally
+		ℓ = Fn^2  # ship L=1 for this geometry
+		h = 0.3ℓ  # clearly, large Froude numbers are easier to resolve
+		freesurf = [measure(Pη,u,v,h,h,flip=true) for u in 1:-h:-1.5, v in h/2:h:1]
+		demihull = wigley(h) # use the same resolution on the hull
+		sys = FSPanelSystem(demihull,freesurf;ℓ,sym_axes=2,θ²=16)
+		gmressolve!(sys;itmax=150)
+	end
+end
+
+# ╔═╡ 54b7bb8e-61b5-4ecf-b478-877ae103a843
+viz(FSsysw)
+
+# ╔═╡ c426e595-d46e-4811-ab36-9f9abb156498
+md" As before, the `NKPanelSystem` is much easier to set-up and faster... but with some caveats in the appendix."
+
+# ╔═╡ 5f00704a-2301-4e81-9582-8375f4e2c9a3
+NKsysw = let
+	ℓ = Fn^2            # ship L=1 for this geometry
+	body = wigley(0.3ℓ) # match the panel size
+	NKPanelSystem(body;ℓ,sym_axes=2,contour=true) |> directsolve!
+end
+
+# ╔═╡ b4ff4822-e678-44f4-83a3-86277378f6e1
+viz(NKsysw)
+
+# ╔═╡ b7c7ce9d-ea8d-4fda-8dd5-bc3e2d398801
+md"""
+
+## Wave profile prediction
+
+We can make the free surface comparison more quantitative by checking the wave elevation along the hull, typically called the wave profile. Let's make a little function to measure this and compare the three methods.
+"""
+
+# ╔═╡ a398512c-644e-4109-bed3-73b01ad85edc
+function profile(sys)
+    panels = filter(onwaterline,sys.body) # grab only waterline panels
+    z = [ζ(x .* SA[1,1,0], sys) for x in panels.x] # query on z=0
+    components(panels.x,1),z
+end
+
+# ╔═╡ b300236a-504f-4a7e-a101-465afd90ce7d
+let 
+	fig = Figure()
+	ax = Axis(fig[1,1],xlabel="x/L", ylabel="ζ/ℓ",limits=(nothing,(-0.2,0.3)))
+	lines!(ax,profile(sysw)...,label="Double-body")
+	lines!(ax,profile(FSsysw)...,label="Free-surface panels")
+	lines!(ax,profile(NKsysw)...,label="Neumann-Kelvin")
+	axislegend(ax,position=:lt)
+	fig
+end
+
+# ╔═╡ e40014f8-cc23-4b64-aead-5aeab5c75e46
+md"""
+Clearly, the double-body solution is missing any kind of wave, as expected. The two  methods aware that Fn=$Fn are predicting the same wavelength (around `λ=2πℓ=` $(round(2π*Fn^2,digits=2))), but there is variation in the amplitude and phasing. Let's consult a previous study:
+
+![](https://github.com/weymouth/NumericalShipHydro/blob/8260a6a3d99b8d67340e82826452ad11640f5e3a/Guanghua2013.png?raw=true)
+
+This is a plot from [a 2013 study](https://link.springer.com/article/10.1016/S1001-6058(13)60431-X?utm_source=researchgate.net&utm_medium=article): the solid line is experimental data, the filled dots are a linear free surface panel method, and the open triangles are a **nonlinear** free surface panel method. (Note the x and y axis have both been doubled in this study.)
+
+1. None of the potential flow methods correctly predict the bow wave height, not even the nonlinear method!
+2. The results are **really** sensitive to the Fn and where exactly you measure. This makes sense because we are measure on panel _edges_ instead of _centers_. That's not going to be as accurate.
+
+
+## Wavemaking resistance
+
+Of course, we can also measure the integrated quantities such as the wave drag. Below, I've included Baar's Neuman-Kelvin results with some experimental data wavemaking resistance data (dashed line) and I've created the matching plot using `NKPanelSystem`.
+
+![](https://github.com/weymouth/NumericalShipHydro/blob/8260a6a3d99b8d67340e82826452ad11640f5e3a/Wigley_Cw.png?raw=true)
+
+"""
+
+# ╔═╡ a2b842e4-150d-4365-9ad1-98f1cd071cfa
+wigleyFn = map(0.16:0.01:0.35) do Fn
+	args = (ℓ=Fn^2,sym_axes=2,filter=true,contour=true) # see apendix
+	sys = NKPanelSystem(demihull;args...)   # set-up 
+	directsolve!(sys,verbose=false)         # solve
+	drag = -steadyforce(sys,S=1)[1]         # force scaled by L²
+	(;Fn,drag)                              # save
+end|> Table;
+
+# ╔═╡ f08e04c4-6355-4efe-8a2d-433b7669ceec
+let
+	fig = Figure()
+	ax = Axis(fig[1,1],xlabel="Fn", ylabel="10⁴ Cw",limits=(nothing,(0,1.8)))
+	plot!(ax,wigleyFn.Fn,1e4wigleyFn.drag)
+	fig
+end
+
+# ╔═╡ 3203471b-732f-4ef7-898a-a6a983f87f94
+md"""
+Lot's of good things to notice here:
+1. First, we see the expected trend of increasing $C_W$ with $\text{Fn}$. Unlike the submarine, a surface piercing hull always generates waves, so $C_W>0$ for all $\text{Fn}$. 
+2. Instead of one resistance bump, we get a series of bumps as the transverse waves positively or negatively interfere along the hull.
+3. Our amplitudes match Baar's results very well, but our peaks are earlier: `Fn=0.26->0.24`, `Fn=0.33->0.3`. 
+
+## **Final** Activity 
+ - Discuss the possible causes of the $\text{Fn}$ "phase" error. What could you do to test this?
+ - Check how long it took you to run the 40 free-surface resistance calculations above. How long do you guess a CFD run will take?
+ - Think of a small coding-extension or hydrodynamic study where using `BodyPanelSystem` is the best choice. Now do the same for `FSPanelSystem` and then for `NKPanelSystem`. *Congratulations, you've just thought of three ideas for your class project!* Pick one and have fun.
+"""
+
+# ╔═╡ 3843792b-0282-4a48-865b-6a699839e8c8
+md"""
+
+## Appendix: Waterline panels
+
+Predicting flows generating by ships is unchanged when using a double-`BodyPanelSystem` or `FSPanelSystem`. However, the Kelvin Green's function is derived by applying the FSBC to a source, and it's unsurprising that this solution has issues when that singularity touches the free surface.
+
+> NOTE: The issues below are quite detailed. Feel free to read about them, or skip ahead.
+
+1. As `z→0`, the wavelike term in the Kelvin Green's function generates divergent waves with wavelength `λ→0` but finite amplitude (so infinite slope, velocity, & energy) which persist downstream in the wake.
+_The right way to fix this:_ is to integrate `kelvin=N+W` over each panel - this is how we dealt with the source singularity way back in lecture one. However, we saw in the last notebook that this can't be done with a quadrature, even an adaptive one. **I believe this is still an open problem.**
+
+_What we'll do instead:_ is to apply an upper limit to `kelvin(x,y,z≤-dl)` where `dl` is the length of the panel. This will have no impact on submerged panels, but will **filter** out any waves with `λ<dl` for the waterline panels. This is similar to what a panel integral would do, and ensures our panels can resolve the waves being generated by the Green's function. 
+
+> The `filter` flag is `true` by default in `NKPanelSystem`.
+
+2. The Kelvin Green's function derivation applies to an infinite free surface. Putting a ship hull in the way introduces a modelling error into our system. 
+
+_The accepted fix:_ is to add a waterline **contour** integral to our Green's function. Breaking up the integral into a contribution for each waterline panel produces a new Green's function for those panels alone.
+
+_The obvious problem:_ is that integrating **along the waterline** is incompatible with problem 1. I've checked analytically and this doesn't remove the singular energy in the wake. Noblesse, one of the originators of the Kelvin Green's function, has admitted in a recent series of papers that **this still an open problem**.
+
+> The `contour` flag is `false` by default in `NKPanelSystem`.
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -234,7 +409,7 @@ WGLMakie = "~0.13.8"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.2"
 manifest_format = "2.0"
 project_hash = "f7ea2d87c3f5f766ba60e15ff1813690dca8aebc"
 
@@ -1451,7 +1626,7 @@ version = "3.4.4+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.5+0"
+version = "0.8.1+2"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "NetworkOptions", "OpenSSL_jll", "Sockets"]
@@ -2198,7 +2373,7 @@ version = "4.1.0+0"
 # ╟─be6dec6f-2a55-4f8c-8852-52830656c062
 # ╠═6aa38485-f860-4834-ac8b-7a7761fa26e0
 # ╠═7c9265d4-0bca-4f50-af24-b4c49fab0280
-# ╠═e3bb8c3e-af31-491a-a4de-03c374bd79d5
+# ╠═040b5016-95c6-49c9-b376-1f5ad2be00c8
 # ╟─5396139c-4bdd-4634-a3c6-c83845f514dc
 # ╟─416fde17-16ba-4a29-a910-7f9609243bfd
 # ╠═345b1774-b323-4b48-99d5-2911f25acdde
@@ -2223,5 +2398,24 @@ version = "4.1.0+0"
 # ╠═dc6bcf00-8191-4168-82de-1cd2d8b4666b
 # ╟─ab77f9cd-92e5-47da-b8f8-9ac6743134cb
 # ╟─8d544622-8eb7-4dc5-870e-39ec21f26c70
+# ╟─3894ece3-1224-44f0-b8bb-744502fc9254
+# ╠═28e66fff-ed81-4b0f-b5d1-942d56b0be16
+# ╠═d032aff3-ff91-4f80-ba47-2dca245944e8
+# ╠═5a9269d7-e843-4017-b65c-f5e4b148b027
+# ╟─ae8e281d-9f40-4f3a-a85f-fe767d218116
+# ╠═03b0ad21-cc6d-4c28-8ce7-2af4d4b152d4
+# ╠═54b7bb8e-61b5-4ecf-b478-877ae103a843
+# ╟─c426e595-d46e-4811-ab36-9f9abb156498
+# ╠═5f00704a-2301-4e81-9582-8375f4e2c9a3
+# ╠═b4ff4822-e678-44f4-83a3-86277378f6e1
+# ╟─b7c7ce9d-ea8d-4fda-8dd5-bc3e2d398801
+# ╠═bc18b179-7c98-4aed-979c-7b7233a24811
+# ╠═a398512c-644e-4109-bed3-73b01ad85edc
+# ╟─b300236a-504f-4a7e-a101-465afd90ce7d
+# ╟─e40014f8-cc23-4b64-aead-5aeab5c75e46
+# ╠═a2b842e4-150d-4365-9ad1-98f1cd071cfa
+# ╟─f08e04c4-6355-4efe-8a2d-433b7669ceec
+# ╟─3203471b-732f-4ef7-898a-a6a983f87f94
+# ╟─3843792b-0282-4a48-865b-6a699839e8c8
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
