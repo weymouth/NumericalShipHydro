@@ -207,9 +207,9 @@ This is why everyone uses Newman's approach for $N$. It works!
 
 Now let's consider $W$. The fundamental problem is that the integrand
 
-$W_i=\exp(z(1+T^2))\sin(ψ(T))$
+$W_i=\exp(z(1+T^2))\sin(\psi(T))$
 
-dies out very slowly if $z\rightarrow 0$, making it very hard for `quadgk` to resolve all the waves. However, **the contribution of most of the waves cancel out!** Only the regions where $\psi'\approx 0$ (where the phase is "stationary") make a significant contribution to the integral.
+is a just sinwave with phase $\psi(T) = (x+|y|T)\sqrt{1+T^2}$, but the amplitude decays **very** slowly as $z\rightarrow 0$. This makes it very hard for `quadgk` to resolve all the waves, but **the contribution of most of the waves cancel out!** Only the regions where $\psi'\approx 0$ (where the phase is "stationary") make a significant contribution to the integral.
 
 """
 
@@ -220,9 +220,12 @@ md"""x $xs,  y $ys,  z $zs"""
 let
 	z = z1
 	b = min(10,√abs(-3log(10)/z))
-	plot(range(-b,b,1000),T->Wi(x,y,z,T),fill=(0,:blue,0.2),label="Wi",xlabel="T")
-	T₀ = y==0 ? [0.] : @. (-x+[-1,1]*√(max(0,x^2-8y^2)))/4y
-	scatter!(T₀,T->Wi(x,y,z,T),label="T₀",xlims=(-b,b))
+	plot(range(-b,b,1000),T->Wi(x,y,z,T),fill=(0,:blue,0.2),label="Wi",
+		 xlabel="T",xlims=(-b,b))
+	T₀ = y==0 ? Inf : @. (-x+√(max(0,x^2-8y^2)))/4y
+	T₀<b &&	scatter!([T₀],[Wi(x,y,z,T₀)],label="T₀: diverging",c=:green,alpha=0.5)
+	T₀ = y==0 ? 0. : @. (-x-√(max(0,x^2-8y^2)))/4y
+	scatter!([T₀],[Wi(x,y,z,T₀)],label="T₀: transverse",c=:red,alpha=0.5)
 end
 
 # ╔═╡ 7898c3e1-6224-4200-9bae-e1d68627c6ab
@@ -247,6 +250,23 @@ So there are two stationary points depending on the $x,y$ position. These are th
  - Where do the stationary points converge?
  - How does this relate to the famous [Kelvin wake angle](https://en.wikipedia.org/wiki/Kelvin_wake_pattern) of $\approx 19.47^o$.
 """
+
+# ╔═╡ 5a99604f-c28a-4735-a9b7-0e749daccbc1
+md"See a hint? $(@bind hint CheckBox())"
+
+# ╔═╡ 390d8758-a05f-427e-b701-d49d5107c854
+hint && let
+	function triangle(ξ)
+		x(T) = ξ*(2T^2+1)/(1+T^2)^(3/2)
+		y(T) = ξ*T/(1+T^2)^(3/2)
+		plot!(x,y,1/√2,20,c=:green,label="")
+		plot!(x,y,-20,-1/√2,c=:green,label="")
+		plot!(x,y,-1/√2,1/√2,c=:red,label="")
+	end
+	plot(aspect_ratio=:equal)
+	foreach(triangle, -2π .* (1:3))
+	s = 20.5; plot!([-s,0,-s],[-s/√8,0,s/√8],c=:black,label="")
+end
 
 # ╔═╡ f10b555a-9f57-4d97-99f0-61da8b88496d
 md"""
@@ -324,7 +344,7 @@ flow
 
 # ╔═╡ 7227d01f-67c4-4d6d-80bf-5cab2e066b85
 md"""
-You can ["enhance the image"](https://tvtropes.org/pmwiki/pmwiki.php/Main/EnhanceButton) if you want. $(@bind enhance CheckBox(default=false))
+You can ["enhance the image"](https://www.youtube.com/watch?v=LhF_56SxrGk) if you want. $(@bind enhance CheckBox(default=false))
 
 I've added the $\frac 1 {\sqrt 8}$ Kelvin wake angle lines to the free surface plane plot above and that checks out!
 
@@ -2034,6 +2054,8 @@ version = "1.13.0+0"
 # ╟─21db612f-8023-4130-85f1-e6829d7ecec7
 # ╟─bea64deb-646f-4b22-82fa-7abe7c64d15c
 # ╟─7898c3e1-6224-4200-9bae-e1d68627c6ab
+# ╟─5a99604f-c28a-4735-a9b7-0e749daccbc1
+# ╟─390d8758-a05f-427e-b701-d49d5107c854
 # ╟─f10b555a-9f57-4d97-99f0-61da8b88496d
 # ╠═23a7e728-7c0f-413e-ac85-0fbbdb5ab67a
 # ╠═2a345247-b3e7-4613-ab8d-9b708314065d
