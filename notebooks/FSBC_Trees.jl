@@ -27,7 +27,9 @@ When we consider steady flows with a free surface $\cal S$, we also must satisfy
 
 $\frac{\partial\Phi}{\partial z}+\ell\frac{\partial^2\Phi}{\partial x^2} = 0 \quad\text{on}\quad z=0$
 
-where $\ell\equiv\frac{U^2}g$ is the Froude length, the length scale of the free surface disturbance.
+where $\ell\equiv\frac{U^2}g$ is the **Kelvin length**, the length scale of the free surface disturbance.
+
+> The waves in the Kelvin wake scale with $\ell$ but span a range of sizes. The transverse wave has $\lambda=2\pi\ell$ while the main divergent wave has $\lambda=\frac{4\pi}{3}\ell$, but smaller transverse waves can have $\lambda\le\ell$.
 
 ### Activity
  - How is $\ell$ related to the classic Froude number?
@@ -54,8 +56,8 @@ We have two choices when it comes to solving for the potential which satisfies t
     - Place these Kelvin panels on $\cal B$, and apply the Neumann condition to determine $q$.
 
 ### Activity
- - Discuss the problems and pitfalls you see with the Free Surface Panel method.
- - Discuss the problems and pitfalls you see with the Neumann-Kelvin Panel method.
+ - Discuss the problems and pitfalls you see with the free surface panel method.
+ - Discuss the problems and pitfalls you see with the Neumann-Kelvin panel method.
  - Which would you try first?
 
 """
@@ -64,7 +66,7 @@ We have two choices when it comes to solving for the potential which satisfies t
 md"""
 ## A free surface panel array experiment
 
-Free surface panel methods seem conceptually easier, but there is an issue: The panel size must be less than $h < \ell/3$ to resolve the waves, and $\ell \ll L$ for surface ships.
+The free surface panel methods seem conceptually easier, but there is an issue: The panel size must be less than $h \ll \ell$ to resolve the waves, and $\ell \ll L$ for surface ships.
 
 Let's get a feel for the size of this problem with a fake free surface simulation. We will create a free surface mesh and add it to a `BodyPanelSystem`.
 
@@ -79,35 +81,34 @@ function fake_FSPanelSystem(ℓ;verbose=false,N_max=3500,kwargs...)
 
 	# free surface for x∈[-2,1], y∈[-1,1]
 	ζ₀(x,y) = SA[x,y,0]
-	freesurf = panelize(ζ₀,-2,1,-1,1,hᵤ=ℓ/3,flip=true;N_max)
+	freesurf = panelize(ζ₀,-2,1,-1,1,hᵤ=ℓ/3,flip=true;N_max) # need to resolve ℓ
+	verbose && println("ℓ=$ℓ, N_body=$(length(body)), N_fs=$(length(freesurf))")
 
-	# concatenate the two arrays and make a BodyPanelSystem
-	verbose && @show ℓ,length(body),length(freesurf)
+	# concatenate the two arrays in a BodyPanelSystem
 	return BodyPanelSystem([body;freesurf];kwargs...)
 end
 
 # ╔═╡ 8c218be2-eaae-4135-9de7-98734314e26b
 for ℓ in logrange(1,1/8,4)
 	sys = fake_FSPanelSystem(ℓ,verbose=true)
-	# solve, and measure cₚ everywhere
 	@time cₚ(directsolve!(sys,verbose=false))
 end
 
 # ╔═╡ 95f68555-57c6-4152-8722-f2dd057e47a2
 md"""
 Not good!
- - `ℓ = 1/8` is already using N = 3,620 panels, and requires > 200 MiB.
+ - `ℓ = 1/8` is already using more than 3.5k panels, and requires more than 200 MiB of memory.
  - The scaling is terrible. Going from $\ell = 1/4 \rightarrow \ell = 1/8$ requires $4\times N$, $10\times$ the memory, and $22\times$ the time!
 
-And $\ell = 1/8$ isn't even small. It corresponds to $\mathrm{Fn} = $(round(1/√8, digits = 2)). Getting to $\mathrm{Fn} = 0.25$ takes 30 times longer, and beyond that gives an out-of-memory error!
+And $\ell = 1/8$ isn't even small. It corresponds to $\mathrm{Fn} \approx 0.35$. Getting to $\mathrm{Fn} = 0.25$ takes 30 times longer, and beyond that gives an out-of-memory error!
 
 ## Barnes-Hut
 
-We will steal an idea from cosmology to speed up the evaluation of $\Phi(x)$ when $N>O(100)$ - a [Barnes-Hut](https://en.wikipedia.org/wiki/Barnes%E2%80%93Hut_simulation) approximation.
+We will steal an idea from cosmology to speed up the code when $N>O(100)$ - a [Barnes-Hut](https://en.wikipedia.org/wiki/Barnes%E2%80%93Hut_simulation) approximation.
 
 ![](https://upload.wikimedia.org/wikipedia/commons/7/7a/Spatial_quadtree_structure_of_the_Barnes-Hut_algorithm_in_the_N-body_problem.gif)
 
-Galaxy simulations like the one above need to compute the influence of all $N$ stars on each other — $O(N^2)$ operations — every time step. This is the same scaling we have to evaluate the potential $\Phi$ or its derivatives on every panel.
+Galaxy simulations like the one above need to compute the influence of all $N$ stars on each other — $O(N^2)$ operations — every time step. This is the same scaling we require to evaluate the potential $\Phi$ on every panel.
 
 The main idea of the Barnes-Hut approximation is to lump the influence of stars together when they are further away. The details of every star's position and mass in another galaxy aren't critical, just their net effect. The stars are organized into nested boxes; with nearby stars lumped together into a box, then nearby boxes lumped together, and so on. Using this [tree](https://en.wikipedia.org/wiki/Binary_tree) data structure, the cost of updating all the stars is reduced from $O(N^2)$ to $O(N\log(N))$.
 
@@ -115,7 +116,7 @@ The main idea of the Barnes-Hut approximation is to lump the influence of stars 
 
 ## PanelTree
 
-I've applied a similar idea to our panel method using a `PanelTree`. Let's try it out on our fake free surface panel system.
+I've applied a similar idea to our panel method by optionally organizing our the panels into a `PanelTree`. Let's try it out on our fake free surface panel system.
 """
 
 # ╔═╡ 80888034-2f98-4b99-bd16-f27d06fef1ca
@@ -123,7 +124,7 @@ fake_FSPanelSystem(1/4,wrap=PanelTree)
 
 # ╔═╡ dd3fd66f-1e26-44b9-9e28-928828b65dd4
 md"""
-Our `body` now says it's in a `PanelTree` with 11 nested grid levels. The $\theta^2$ parameter is the Barnes-Hut cut-off (squared) distance.  If `|x-box|^2 > θ²*box.radius^2`, then the `box` is treated like a single lumped panel. Otherwise, we descend a level down and check the two boxes inside.
+Our `body` now says it's organized as a `PanelTree` with 11 nested grid levels. The $\theta^2$ parameter is the Barnes-Hut cut-off (squared) distance.  If `|x-box|^2 > θ²*box.radius^2`, then the `box` is treated like a single lumped panel. Otherwise, we descend a level down and check the two boxes inside.
 
 Let's compare the timings with and without `PanelTree`:
 """
@@ -143,7 +144,10 @@ function timeit(ℓ,solve! = directsolve!)
 		@btime Φ($x,$sys) seconds=0.05
 		println("  Φ=",round(Φ(x,sys),digits=4))
 	end
-end; timeit(1/4)
+end
+
+# ╔═╡ 65444f7c-0d1c-468a-bcf8-bb37286a6695
+timeit(1/4)
 
 # ╔═╡ 28477585-40e7-4496-be0a-4a4661512288
 md"""
@@ -155,18 +159,16 @@ md"""
 
 ## Iterative solvers
 
-To take full advantage of the PanelTree we need to avoid forming the NxN matrix. This is easily done using a matrix-free iterative solver, like [GMRES](https://en.wikipedia.org/wiki/Generalized_minimal_residual_method). This type of solver only needs to be able to evaluate the linear system error for a guess `q`. It uses the error to update the guess (very cleverly) until convergence.
+To take full advantage of the `PanelTree` we need to avoid forming the NxN matrix. This is easily done using a matrix-free iterative solver, like [GMRES](https://en.wikipedia.org/wiki/Generalized_minimal_residual_method). This type of solver only needs to be able to evaluate the linear system error for a guess `q`. It uses the error to update the guess (very cleverly) until convergence.
 
-For our panel system, this means we only need to write a function to evaluate the Neumann BC on the body, which is simply `derivative(t -> Φ(p.x + t*p.n, sys), 0)`. Done.
-
-The `gmressolve!` function uses this approach. Let's try it out:
+The `gmressolve!` function uses this approach. It evaluates the Neumann BC on each panel in the BodyPanelSystem using AutoDiff, and then iterates with GMRES to find `q`. Let's try it out:
 """
 
 # ╔═╡ dcaec56e-406d-4845-bcb3-ddb23af5a820
 fake_FSPanelSystem(1/4,wrap=PanelTree) |> gmressolve!
 
 # ╔═╡ 2d7bd51f-b8f2-4a5d-82a8-3459907108e2
-md"The `gmressolve!` information shows the number of iterations `niter=4`, the `timer: 156ms` and reports the solution meets the given tolerance, which defaults at 0.1%.
+md"The display shows the number of iterations `niter=4`, the `timer: 156ms`, and reports the solution meets the given tolerance, which defaults at 0.1%.
 
 Let's repeat our timing test from above using `ℓ=1/8` and `gmressolve!`:
 "
@@ -175,7 +177,7 @@ Let's repeat our timing test from above using `ℓ=1/8` and `gmressolve!`:
 timeit(1/8,gmressolve!)
 
 # ╔═╡ 82a31d4e-a423-4a7c-828a-e013c0cd3ee3
-md"We see a nice speedup with no further loss of accuracy using the GMRES solver. But the huge advantage is the memory — from 206 MiB down to < 1 MiB. This should let us tackle bigger systems without crashing."
+md"We see a nice speedup with no further loss of accuracy using the GMRES solver. But the huge advantage is the memory — from 206 MiB down to 1 MiB. This should let us tackle bigger systems without crashing."
 
 # ╔═╡ 15a414fa-b464-4310-bf1e-4caf11156d4a
 for ℓ in logrange(1/8,1/16,3)
@@ -224,13 +226,16 @@ Finally, we can substitute the dynamic equation into the kinematic to remove the
 
 $\frac{\partial\Phi}{\partial z}+\ell\frac{\partial^2\Phi}{\partial x^2} = 0 \quad\text{on}\quad z=0$
 
-where $\ell\equiv\frac{U^2}g$ is the Froude length, the length scale of the free surface disturbance.
+where $\ell\equiv\frac{U^2}g$ is the Kelvin length.
 
 - If the forward speed is zero, then $\ell = 0$ and the FSBC becomes a Neumann condition on $z = 0$. This means that the double-body flow is the low-speed limit.
 - For $\ell > 0$ this equation is a steady [wave equation](https://en.wikipedia.org/wiki/Wave_equation) for $\Phi$ on the free surface.
 
-> Critically, **any** superposition of sine waves of any amplitude, phase, and direction satisfies this equation. The only restriction is that the projection of the wavelength in $x$ is $\lambda_x = 2\pi\ell$.
+> Critically, **any** superposition of sine waves of any amplitude, phase, and direction $\theta$ satisfies this equation. 
 
+The only restriction is that the wake must be steady, so the x-projection of the phase speed $V_p=\sqrt{g\lambda/2\pi}$ matches the reference frame speed, i.e. $V_p/\cos\theta = U$. This sets 
+
+$\lambda=2\pi\ell\cos^2(\theta)$
 """
 
 # ╔═╡ 9259011f-eb22-4f6d-92c6-4eb17b2ead33
@@ -239,17 +244,17 @@ md"""
 
 The fact that so many different waves satisfy the linear FSBC means we have to treat the $x$-derivative very carefully to get the solution we want.
  - We don't want any waves to radiate upstream from the disturbance. This would violate basic causality but the FSBC can't tell the difference.
- - Similarly, we don't want any waves to reflect off the back edge of the free surface mesh. We must stop the domain at some point (the PanelTree only helps so much) but this potentially induces a large modelling error.
+ - Similarly, we don't want any waves to reflect off the back edge of the free surface mesh. We must stop the domain at some point (the `PanelTree` only helps so much) but this potentially induces a large modelling error.
 
-Unfortunately, these issues always led to solver divergence when I tried to use AutoDiff for the FSBC.
+If you use AutoDiff or direct calculation to compute the derivatives the FSBC the solution is not well-defined and **the GMRES solver will diverge!**
 
 The classic approach to "fix" these problems is to use an upwinded finite-difference method to estimate the second derivative in $x$. Such a scheme introduces a strong downwind information bias and a significant truncation error that damps out small waves, accelerating convergence.
 
-In NeumannKelvin, I use the one-sided second-order estimate for the second derivative. [The resulting function](https://github.com/weymouth/NeumannKelvin.jl/blob/69d08ee6ab1865f9453687ff6ca621d653b5f268/src/FSPanelSystem.jl#L72) is frustratingly complicated, but the pseudocode for the FSBC at panel $i$ is essentially
+In NeumannKelvin, I use AD on the $z$ derivative and the one-sided second-order estimate for the second derivative in $x$. [The resulting function](https://github.com/weymouth/NeumannKelvin.jl/blob/69d08ee6ab1865f9453687ff6ca621d653b5f268/src/FSPanelSystem.jl#L72) is frustratingly complicated, but the pseudocode for the FSBC at panel $i$ is essentially
 
-```b[i] = -derivative(z -> Φ(x[i], y, z), z) - ℓ*(2Φ[i] - 5Φ[i-1] + 4Φ[i-2] - Φ[i-3]) / h^2```
+```b[i] = -derivative(z -> Φ(x[i],y,z), z) - ℓ*(2Φ[i]-5Φ[i-1]+4Φ[i-2]-Φ[i-3])/h^2```
 
-which GMRES drives to 0 iteratively.
+As we will see, GMRES is able to converge to a solution using this scheme, although it is much slower (taking O(100) iterations) and misses the fine details in the Kelvin wake.
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -267,7 +272,7 @@ NeumannKelvin = "~0.9.0"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.2"
 manifest_format = "2.0"
 project_hash = "a2610e10dc5bd82358949f48b1ff790efd0c4bf2"
 
@@ -817,7 +822,7 @@ version = "0.3.27+1"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.5+0"
+version = "0.8.1+2"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -1124,6 +1129,7 @@ version = "17.4.0+2"
 # ╠═80888034-2f98-4b99-bd16-f27d06fef1ca
 # ╟─dd3fd66f-1e26-44b9-9e28-928828b65dd4
 # ╠═23ceb366-9c46-4d16-bd88-243ae94095b4
+# ╠═65444f7c-0d1c-468a-bcf8-bb37286a6695
 # ╟─28477585-40e7-4496-be0a-4a4661512288
 # ╠═dcaec56e-406d-4845-bcb3-ddb23af5a820
 # ╟─2d7bd51f-b8f2-4a5d-82a8-3459907108e2
