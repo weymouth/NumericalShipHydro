@@ -268,7 +268,7 @@ begin
 		ℓ = Fn^2  # ship L=1 for this geometry
 		h = 0.3ℓ  # clearly, large Froude numbers are easier to resolve
 		freesurf = [measure(ζ₀η,x,y,h,h,flip=true) for x in 1:-h:-1.5, y in h/2:h:1]
-		demihull = wigley(h) # use the same resolution on the hull
+		demihull = wigley(h) # need to match h for clean plots
 		sys = FSPanelSystem(demihull,freesurf;ℓ,sym_axes=2,θ²=16)
 		gmressolve!(sys;itmax=150)
 	end
@@ -285,11 +285,7 @@ md"
 "
 
 # ╔═╡ 5f00704a-2301-4e81-9582-8375f4e2c9a3
-NKsysw = let
-	ℓ = Fn^2            # ship L=1 for this geometry
-	body = wigley(0.3ℓ) # match the panel size
-	NKPanelSystem(body;ℓ,sym_axes=2,contour=true) |> directsolve!
-end
+NKsysw = NKPanelSystem(demihull;ℓ=Fn^2,sym_axes=2,contour=true) |> directsolve!
 
 # ╔═╡ b4ff4822-e678-44f4-83a3-86277378f6e1
 viz(NKsysw)
@@ -332,7 +328,7 @@ Clearly, the double-body solution is missing any kind of wave, as expected. The 
 The solid line is experimental data, the filled dots are a linear free surface panel method, and the open triangles are a **nonlinear** free surface panel method. (Note the x and y axis have both been doubled in this study.)
 
 1. None of the potential flow methods correctly predict the bow wave height, not even the nonlinear method!
-2. The results are **really** sensitive to the Fn and where exactly you measure. This makes sense because we are measuring on panel _edges_ at `z=0`.
+2. The results are **really** sensitive to the discretization. Try commenting out the `demihull = wigley(h)` line when defining the FSPanelSystem!
 
 > Not only is `kelvin(z=0)` singular, the analytic `∫G` function used for source panels is singular on panel edges. I don't know how previous FS panel methods avoid this issue.
 
@@ -365,12 +361,11 @@ end
 # ╔═╡ 3203471b-732f-4ef7-898a-a6a983f87f94
 md"""
 Lot's of good things to notice here:
-1. First, we see the expected trend of increasing $C_W$ with $\text{Fn}$. Unlike the submarine, a surface piercing hull always generates waves, so $C_W>0$ for all $\text{Fn}$. However, that contribution to the total resistance is very small when $\ell<L/100$.
-2. Instead of one resistance bump, we get a series of bumps as the transverse waves positively or negatively interfere along the hull.
-3. Our amplitudes match Baar's results very well, but our peaks are earlier: `Fn=0.26->0.24`, `Fn=0.33->0.3`. 
+1. Unlike the submarine, a surface piercing hull always generates waves, so $C_W>0$ for all $\text{Fn}$. However, when $\text{Fn}\le 0.1$ it means $\ell\le L/100$ and $C_W$ is probably negligible.
+1. Instead of one resistance bump, we get a series of bumps as the transverse waves positively or negatively interfere along the hull.
+1. Our bump locations and magnitudes don't perfectly line up with Baar, but they are pretty close.
 
 ## **Final** Activity 
- - Discuss the possible causes of the $\text{Fn}$ "phase" error. What could you do to test this?
  - Check how long it took you to run these 20 free-surface resistance calculations above. How long do you guess a CFD run will take?
  - Think of a small coding-extension or hydrodynamic study where using `BodyPanelSystem` is the best choice. Now do the same for `FSPanelSystem` and then for `NKPanelSystem`. *Congratulations, you've just thought of three ideas for your class project!* Pick one and have fun.
 """
