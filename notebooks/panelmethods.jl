@@ -130,7 +130,7 @@ md"""
 
 We will determine the strength `q` of each panel such that the flow through all the panels is zero.
 
-Defining $\vec U$ as the free stream velocity vector, the total potential flow velocity is 
+Defining $\vec U$ as the free stream velocity vector, the total potential flow velocity is
 
 $\vec u(x) = \vec U + \vec\nabla\Phi(x)$
 
@@ -178,7 +178,7 @@ This is a complete panel method! In four lines of code!!
 """
 
 # ╔═╡ d25fa669-81af-46bc-ae20-70b1a5db2465
-@time broadcast(∂ₙϕ,panels,panels') # how long does this take?
+@time ∂ₙϕ.(panels,panels') # how long does this take?
 
 # ╔═╡ 4ea96c89-e8ac-4f29-bc20-8034fdfe0c08
 @time A \ b # how long does this take?
@@ -199,7 +199,7 @@ Below I show the flow on the $z=0$ slice through the **3D** potential flow solut
 # ╔═╡ d0cc0f66-f871-417a-90d9-8aea80cc3f30
 begin
 	# Functions to compute disturbance potential and velocity
-	Φ(x,q,panels) = sum(qᵢ*ϕ(x,pᵢ) for (qᵢ,pᵢ) in zip(q,panels)) 
+	Φ(x,q,panels) = sum(qᵢ*ϕ(x,pᵢ) for (qᵢ,pᵢ) in zip(q,panels))
 	∇Φ(x,q,panels) = gradient(ξ->Φ(ξ,q,panels),x) # AutoDiff
 end
 
@@ -240,7 +240,7 @@ let
 
 		# measure u_mag and α, where cos(α) = U⋅n
 		u_mag = [norm(∇Φ(x,q,panels)+U) for x in panels.x]
-		α = [acos(U⋅n) for n in panels.n]
+		α = [acos(U ⋅ n / norm(U)) for n in panels.n]
 
 		# add data to the plot
 		scatter!(α,u_mag,label="$(length(panels)) panels")
@@ -281,7 +281,7 @@ The analytic solution for a sphere is $\frac 12 ρV = \frac 23 \rho \pi R^3$ on 
 """
 
 # ╔═╡ 00965cd1-b233-42f7-8a6d-1688175cac1e
-begin	
+begin
 	# form the matrix by stacking rows
 	function addedmass(panels)
 	    A = [∂ₙϕ(pᵢ,pⱼ) for pᵢ in panels, pⱼ in panels] # form A once
@@ -293,6 +293,8 @@ begin
 		qᵢ = A\components(panels.n,i)                   # bᵢ = i ⋅ n
 		-sum(Φ(p.x,qᵢ,panels)*p.n*p.dA for p in panels) # integrate reaction
 	end
+
+    # test the function
 	addedmass(panels)/(2π/3) # scale by exact solution
 end
 
