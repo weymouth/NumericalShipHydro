@@ -44,7 +44,7 @@ where $\theta_1\in[0,\pi],\ \theta_2∈[0,2\pi]$ are the azimuth and polar angle
 # ╔═╡ 0576ce9d-dd33-4b20-915a-24421037d7c0
 function sphere(h,R=1)
 	# sphere's parametric equation
-    S(θ₁,θ₂) = R .* SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)]
+    S(θ₁,θ₂) = R * SA[cos(θ₂)*sin(θ₁),sin(θ₂)*sin(θ₁),cos(θ₁)]
 
 	# angle step dθ that evenly divides π and gives dθ*R≈h
     dθ = π/round(π*R/h)
@@ -57,7 +57,7 @@ function sphere(h,R=1)
 end
 
 # ╔═╡ ceaa01da-9fba-454f-8a98-a13874f72295
-h,R = 0.4,1.; panels = sphere(h,R); display(panels)
+h = 0.4; panels = sphere(h); display(panels)
 
 # ╔═╡ 71df011e-bf21-47c3-85f0-18a9aca54fee
 md"""
@@ -304,9 +304,9 @@ Since we've scaled by the solution, the result _should_ be the identity matrix. 
 
 #### Activity:
  - Write a function `sphere_ma_error(h)` which uses `LinearAlgebra: norm,I` to compute the `addedmass` error.
- - Make a plot of $h/R$ vs the error. Is the code validated?
- - Use the @time macro to determine how long each simulation takes as a function of h.
- - What valueof $h$ is pragmatic, and how might you generalize this to other geometries?
+ - Use the @timed macro to evaluate your function for a few values of h.
+ - Make a plot of $h/R$ vs the error and the time. What valueof $h$ is pragmatic, and how might you generalize this to other geometries?
+ - Is the code validated?
 """
 
 # ╔═╡ 1aa3a5c4-a4d7-45fe-b514-12bfb60d893b
@@ -1974,3 +1974,4 @@ version = "1.13.0+0"
 # ╟─9574fedd-8bc8-4363-8d46-c967d046573e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
+
