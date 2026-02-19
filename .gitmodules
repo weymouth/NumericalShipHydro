@@ -1,0 +1,3 @@
+[submodule "guest_lectures/HIT.jl"]
+	path = guest_lectures/HIT.jl
+	url = https://github.com/b-fg/HIT.jl.git
