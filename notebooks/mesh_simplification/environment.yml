@@ -1,0 +1,12 @@
+name: mesh_simplification
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy
+  - ipykernel
+  - pip
+  - pip:
+    - trimesh[easy]
+    - juliacall
