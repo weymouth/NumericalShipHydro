@@ -8,27 +8,10 @@ using InteractiveUtils
 using NeumannKelvin, WGLMakie # fancy 3D interactive plots!!
 
 # ╔═╡ 9ef3d909-2169-4136-be87-246e72f43ee2
-begin
-	#1. Set-up
-	using NURBS, FileIO , PlutoUI
-	torus_url = "https://raw.githubusercontent.com/HoBeZwe/NURBS.jl/refs/heads/main/test/assets/torus.stp"
-	torus_patches = torus_url |> download |> load
-	torus_panels = panelize(torus_patches,hᵤ=1/2)
-
-	# 2. Solve
-	torus_sys = BodyPanelSystem(torus_panels,U=SA[0,0,1]) |> directsolve!
-
-	# 3. Measure
-	viz(torus_sys,vscale=3)
-end
+using NURBS, FileIO , PlutoUI
 
 # ╔═╡ 7660e9fe-6df0-4e26-aa24-2d3b3481bb09
-begin # 1. Set-up
-	using GeometryBasics, MeshIO
-	dolphin_url = "https://raw.githubusercontent.com/weymouth/NeumannKelvin.jl/refs/heads/main/examples/LowPolyDolphin.stl"
-	dolphin_panels = dolphin_url |> download |> load |> panelize
-	viz(dolphin_panels,vscale=10,colormap=:lake)
-end
+using GeometryBasics, MeshIO
 
 # ╔═╡ 84fa0a7a-81c1-4199-8d58-6ee5026c7527
 md"""
@@ -42,6 +25,20 @@ NURBS are used to describe smooth objects like ship hulls, and form the basis of
 
 Since NURBS are parametric surfaces, the methods used in the last notebook will work as soon as we load a "STP" file using `FileIO.jl` and `NURBS.jl`. Here's a simple example that works nicely "out of the box":
 """
+
+# ╔═╡ 064da746-0c9e-4ce3-8d63-4c157a8d197f
+let
+	#1. Set-up
+	torus_url = "https://raw.githubusercontent.com/HoBeZwe/NURBS.jl/refs/heads/main/test/assets/torus.stp"
+	torus_patches = torus_url |> download |> load
+	torus_panels = panelize(torus_patches,hᵤ=1/2)
+
+	# 2. Solve
+	torus_sys = BodyPanelSystem(torus_panels,U=SA[0,0,1]) |> directsolve!
+
+	# 3. Measure
+	viz(torus_sys,vscale=3)
+end
 
 # ╔═╡ 6e18b85e-220e-4466-8246-746bebed1866
 md"""
@@ -57,6 +54,13 @@ The format is widely used because of its generality, but it is _MUCH_ less effic
 
 Luckily, computer scientists (and physical scientists) have developed excellent tools to speed up dealing with such meshes. I've used those methods in the example below, but I will hold off explaining them until the next notebook. Here's a nice "little" example with 1,456 triangles that I found online!
 """
+
+# ╔═╡ 7358b244-6dbc-4636-bfa3-55ddfb786122
+begin # 1. Set-up
+	dolphin_url = "https://raw.githubusercontent.com/weymouth/NeumannKelvin.jl/refs/heads/main/examples/LowPolyDolphin.stl"
+	dolphin_panels = dolphin_url |> download |> load |> panelize
+	viz(dolphin_panels,vscale=10,colormap=:Pissaro)
+end
 
 # ╔═╡ 2b04c118-fadb-4987-8f71-305e6e5ef5f0
 begin # 2. Solve
@@ -185,7 +189,7 @@ WGLMakie = "~0.13.8"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.9"
 manifest_format = "2.0"
 project_hash = "cac40077dd6715cf36a5f55a75609fba53414610"
 
@@ -2226,8 +2230,10 @@ version = "4.1.0+0"
 # ╠═2031a395-433a-402c-bf48-e383293efad0
 # ╟─84fa0a7a-81c1-4199-8d58-6ee5026c7527
 # ╠═9ef3d909-2169-4136-be87-246e72f43ee2
+# ╠═064da746-0c9e-4ce3-8d63-4c157a8d197f
 # ╟─6e18b85e-220e-4466-8246-746bebed1866
 # ╠═7660e9fe-6df0-4e26-aa24-2d3b3481bb09
+# ╠═7358b244-6dbc-4636-bfa3-55ddfb786122
 # ╠═2b04c118-fadb-4987-8f71-305e6e5ef5f0
 # ╟─b3cd27dd-eef1-41f4-b753-779f727388f3
 # ╠═370d3120-5e56-4925-9e75-53c2e47d4f97
