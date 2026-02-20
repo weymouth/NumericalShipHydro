@@ -52,8 +52,9 @@ end
 
 # ╔═╡ eae81e8a-2173-4898-a36c-c6b559c814ee
 let # this defines a little local environment to play in
-	h = 1/4
-	panels = sphere(h; devlimit=0.05, flip=false, transpose=false) # what are these?
+	h = 0.4
+	panels = sphere(h; devlimit=0.06, flip=false, transpose=false) # what are these?
+	println("N=",length(panels))
 	viz(panels,colorrange=(0,h^2),label="dA",vscale=3) # what's this?
 end
 
@@ -288,7 +289,7 @@ WGLMakie = "~0.13.8"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.9"
 manifest_format = "2.0"
 project_hash = "f7ea2d87c3f5f766ba60e15ff1813690dca8aebc"
 
