@@ -1,0 +1,3 @@
+[submodule "notebooks/mesh_simplification/line-quadric-simplification"]
+	path = notebooks/mesh_simplification/line-quadric-simplification
+	url = https://github.com/HTDerekLiu/line-quadric-simplification.git
