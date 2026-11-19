@@ -1,6 +1,6 @@
 # NumericalShipHydro
 Repository for the TU Delft course in Numerical Ship Hydrodynamics
-![Kelvin wave from a moving source](source-kelvin.png)
+![Kelvin wake of a hydrofoil below the free surface, from the lifting surfaces notebook](hydrofoil-kelvin.png)
 
 Learning Objectives
 ---
