@@ -71,13 +71,13 @@ md"""
 
 The free surface panel methods seem conceptually easier, but there is an issue: The panel size must be less than $h \ll \ell$ to resolve the waves, and $\ell \ll L$ for surface ships.
 
-Let's get a feel for the size of this problem with a fake free surface simulation. We will create a free surface mesh and add it to a `BodyPanelSystem`.
+Let's get a feel for the size of this problem with a fake free surface simulation. We will create a free surface mesh and add it to the body panels in a `PanelSystem`.
 
 > This is just an illustration. We haven't implemented the FSBC yet, so this is actually just an inefficient way to compute the double-body potential.
 """
 
 # ╔═╡ f3e1e5cf-f0a5-4e9d-a952-8aa176507492
-function fake_FSPanelSystem(ℓ;verbose=false,N_max=3500,kwargs...)
+function fake_FSPanelSystem(ℓ;verbose=false,N_max=3500,wrap=identity,kwargs...)
 	# submerged sphere with diameter=1
 	S(θ₁,θ₂) = 0.5SA[cos(θ₁),-sin(θ₂)*sin(θ₁),cos(θ₂)*sin(θ₁)-2]
 	body = panelize(S,0,π,0,2π,hᵤ=ℓ;N_max) # these panels can be a bit bigger
@@ -87,8 +87,8 @@ function fake_FSPanelSystem(ℓ;verbose=false,N_max=3500,kwargs...)
 	freesurf = panelize(ζ₀,-2,1,-1,1,hᵤ=ℓ/3,flip=true;N_max) # need to resolve ℓ
 	verbose && println("ℓ=$ℓ, N_body=$(length(body)), N_fs=$(length(freesurf))")
 
-	# concatenate the two arrays in a BodyPanelSystem
-	return BodyPanelSystem([body;freesurf];kwargs...)
+	# concatenate the two arrays, optionally wrap them, and make a PanelSystem
+	return PanelSystem(wrap([body;freesurf];kwargs...))
 end
 
 # ╔═╡ 8c218be2-eaae-4135-9de7-98734314e26b
@@ -119,7 +119,7 @@ The main idea of the Barnes-Hut approximation is to lump the influence of stars 
 
 ## PanelTree
 
-I've applied a similar idea to our panel method by optionally organizing our the panels into a `PanelTree`. Let's try it out on our fake free surface panel system.
+I've applied a similar idea to our panel method by optionally organizing the panels into a `PanelTree`. Let's try it out on our fake free surface panel system.
 """
 
 # ╔═╡ 80888034-2f98-4b99-bd16-f27d06fef1ca
@@ -127,7 +127,7 @@ fake_FSPanelSystem(1/4,wrap=PanelTree)
 
 # ╔═╡ dd3fd66f-1e26-44b9-9e28-928828b65dd4
 md"""
-Our `body` now says it's organized as a `PanelTree` with 11 nested grid levels. The $\theta^2$ parameter is the Barnes-Hut cut-off (squared) distance.  If `|x-box|^2 > θ²*box.radius^2`, then the `box` is treated like a single lumped panel. Otherwise, we descend a level down and check the two boxes inside.
+Our `boundary` now says it's organized as a `PanelTree` with 11 nested grid levels. The $\theta^2$ parameter is the Barnes-Hut cut-off (squared) distance.  If `|x-box|^2 > θ²*box.radius^2`, then the `box` is treated like a single lumped panel. Otherwise, we descend a level down and check the two boxes inside.
 
 Let's compare the timings with and without `PanelTree`:
 """
@@ -135,7 +135,7 @@ Let's compare the timings with and without `PanelTree`:
 # ╔═╡ 23ceb366-9c46-4d16-bd88-243ae94095b4
 function timeit(ℓ,solve! = directsolve!)
 	println("Panel Table")
-	sys = fake_FSPanelSystem(ℓ); x = sys.body.x[1] # first panel center
+	sys = fake_FSPanelSystem(ℓ); x = sys.boundaries[1].x[1] # first panel center
 	@time directsolve!(sys,verbose=false)
 	@btime Φ($x,$sys) seconds=0.05
 	println("  Φ=",round(Φ(x,sys),digits=4))
@@ -164,7 +164,7 @@ md"""
 
 To take full advantage of the `PanelTree` we need to avoid forming the NxN matrix. This is easily done using a matrix-free iterative solver, like [GMRES](https://en.wikipedia.org/wiki/Generalized_minimal_residual_method). This type of solver only needs to be able to evaluate the linear system error for a guess `q`. It uses the error to update the guess (very cleverly) until convergence.
 
-The `gmressolve!` function uses this approach. It evaluates the Neumann BC on each panel in the BodyPanelSystem using AutoDiff, and then iterates with GMRES to find `q`. Let's try it out:
+The `gmressolve!` function uses this approach. It evaluates the Neumann BC on each panel in the `PanelSystem` using AutoDiff, and then iterates with GMRES to find `q`. Let's try it out:
 """
 
 # ╔═╡ dcaec56e-406d-4845-bcb3-ddb23af5a820
@@ -249,7 +249,7 @@ The fact that so many different waves satisfy the linear FSBC means we have to t
  - We don't want any waves to radiate upstream from the disturbance. This would violate basic causality but the FSBC can't tell the difference.
  - Similarly, we don't want any waves to reflect off the back edge of the free surface mesh. We must stop the domain at some point (the `PanelTree` only helps so much) but this potentially induces a large modelling error.
 
-If you use AutoDiff or direct calculation to compute the derivatives the FSBC the solution is not well-defined and **the GMRES solver will diverge!**
+If you use AutoDiff or direct calculation to compute the derivatives in the FSBC, the solution is not well-defined and **the GMRES solver will diverge!**
 
 The classic approach to "fix" these problems is to use an upwinded finite-difference method to estimate the second derivative in $x$. Such a scheme introduces a strong downwind information bias and a significant truncation error that damps out small waves, accelerating convergence.
 
@@ -272,7 +272,9 @@ plt = begin
 	x,y = 1:-hfs:-4, hfs/2:hfs:3
 	freesurf = measure.(ζ₀,x,y',hfs,hfs,flip=true)
 	# pipeline with y-symmetry
-	z = FSPanelSystem(body,freesurf;ℓ,sym_axes=2) |> gmressolve! |> ζ
+	fs = FreeSurface(freesurf;ℓ)
+	sys = PanelSystem((PanelTree(body),fs),domain=Unbounded(sym_axes=2)) |> gmressolve!
+	z = ζ(fs,sys)
 	surface(x,y, ℓ .* z',zlims=(-1,1))
 end
 
@@ -281,15 +283,15 @@ plt
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
+[compat]
+BenchmarkTools = "~1.6.3"
+NeumannKelvin = "~0.11.0"
+Plots = "~1.41.5"
+
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-
-[compat]
-BenchmarkTools = "~1.6.3"
-NeumannKelvin = "~0.9.0"
-Plots = "~1.41.5"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -298,7 +300,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "6bc89f19bcaef3bdca780252bd6d4ca98b614690"
+project_hash = "6e515d6752a915b0f99e8836d921e94a842e70f9"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -661,7 +663,7 @@ uuid = "c87230d0-a227-11e9-1b43-d7ebe4e7570a"
 version = "0.4.5"
 
 [[deps.FFMPEG_jll]]
-deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
+deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libva_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
 git-tree-sha1 = "01ba9d15e9eae375dc1eb9589df76b3572acd3f2"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "8.0.1+0"
@@ -1143,16 +1145,17 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["AcceleratedKernels", "DataInterpolations", "FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "HCubature", "ImplicitBVH", "Krylov", "LinearAlgebra", "LinearOperators", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "TupleTools", "TypedTables"]
-git-tree-sha1 = "72f873533e5575a637422eec5a255d60d2786e0e"
+git-tree-sha1 = "1610782a09ee46de50a70ea83efdf157592adc86"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.9.0"
+version = "0.11.0"
 
     [deps.NeumannKelvin.extensions]
     NeumannKelvinGeometryBasicsExt = "GeometryBasics"
     NeumannKelvinMakieExt = "Makie"
-    NeumannKelvinNURBSExt = "NURBS"
+    NeumannKelvinNURBSExt = ["NURBS", "FileIO"]
 
     [deps.NeumannKelvin.weakdeps]
+    FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
     GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
     Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
     NURBS = "dde13934-061e-461b-aa91-2c0fad390a0d"
@@ -1711,6 +1714,12 @@ git-tree-sha1 = "7ed9347888fac59a618302ee38216dd0379c480d"
 uuid = "ea2f1a96-1ddc-540d-b46f-429655e07cfa"
 version = "0.9.12+0"
 
+[[deps.Xorg_libpciaccess_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
+git-tree-sha1 = "58972370b81423fc546c56a60ed1a009450177c3"
+uuid = "a65dc6b1-eb27-53a1-bb3e-dea574b5389e"
+version = "0.19.0+0"
+
 [[deps.Xorg_libxcb_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libXau_jll", "Xorg_libXdmcp_jll"]
 git-tree-sha1 = "bfcaf7ec088eaba362093393fe11aa141fa15422"
@@ -1823,6 +1832,12 @@ git-tree-sha1 = "9bf7903af251d2050b467f76bdbe57ce541f7f4f"
 uuid = "1183f4f0-6f2a-5f1a-908b-139f9cdfea6f"
 version = "0.2.2+0"
 
+[[deps.libdrm_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libpciaccess_jll"]
+git-tree-sha1 = "28e57478e8a160d346a19c28b3fffb9273bcc9c2"
+uuid = "8e53e030-5e6c-5a89-a30b-be5b7263a166"
+version = "2.4.134+0"
+
 [[deps.libevdev_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "56d643b57b188d30cccc25e331d416d3d358e557"
@@ -1846,6 +1861,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
 git-tree-sha1 = "6ab498eaf50e0495f89e7a5b582816e2efb95f64"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
 version = "1.6.54+0"
+
+[[deps.libva_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll", "Xorg_libXext_jll", "Xorg_libXfixes_jll", "libdrm_jll"]
+git-tree-sha1 = "21cbc8fc2ac0bb182ed461e556d9c062ae6a3164"
+uuid = "9a156e7d-b971-5f62-b2c9-67348b8fb97c"
+version = "2.24.1+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll"]

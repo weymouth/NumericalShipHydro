@@ -209,7 +209,7 @@ Now let's consider $W$. The fundamental problem is that the integrand
 
 $W_i=\exp(z(1+T^2))\sin(\psi(T))$
 
-is a just sinwave with phase $\psi(T) = (x+|y|T)\sqrt{1+T^2}$, but the amplitude decays **very** slowly as $z\rightarrow 0$. This makes it very hard for `quadgk` to resolve all the waves, but **the contribution of most of the waves cancel out!** Only the regions where $\psi'\approx 0$ (where the phase is "stationary") make a significant contribution to the integral.
+is just a sine wave with phase $\psi(T) = (x+|y|T)\sqrt{1+T^2}$, but the amplitude decays **very** slowly as $z\rightarrow 0$. This makes it very hard for `quadgk` to resolve all the waves, but **the contribution of most of the waves cancel out!** Only the regions where $\psi'\approx 0$ (where the phase is "stationary") make a significant contribution to the integral.
 
 """
 
@@ -283,7 +283,7 @@ In `NeumannKelvin.jl`, I extend their approach to handle a few complexities of t
 @time wavelike_cases = [wavelike(x,y,z) for (x,y,z) in x_cases]; # O(100) × speed-up
 
 # ╔═╡ 326a691a-3133-414f-9953-a9c8e65eb959
-# a single challenging case take quadgk 6ms (on my laptop)
+# a single challenging case takes quadgk 6ms (on my laptop)
 @time quadgk(T->Wi(-10.,-1.,-1e-3,T),-Inf,Inf);
 
 # ╔═╡ 8f72eae3-4589-418a-8049-318d5b671862
@@ -357,8 +357,8 @@ I've added the $\frac 1 {\sqrt 8}$ Kelvin wake angle lines to the free surface p
 In this notebook we developed methods to evaluate the Kelvin Green's function for free surface flows. In the process we learned three classes of algorithms:
 
 1. Adaptive methods like `quadgk` are the backbone of modern general-purpose software: from online streaming to weather forecasting.
-1. Machine learning methods like Chebyshev-function approximation might accelerate your predictions; but you need to pick the right problem, get a lot of data, and be careful about generalization error.
-2. Semi-analytic methods like numerical stationary phase are a silver bullet for really hard problems, but can take years (or centuries) to develop.
+2. Machine learning methods like Chebyshev-function approximation might accelerate your predictions; but you need to pick the right problem, get a lot of data, and be careful about generalization error.
+3. Semi-analytic methods like numerical stationary phase are a silver bullet for really hard problems, but can take years (or centuries) to develop.
 
 In the end, we've come up with a very fast, accurate, and robust way to evaluate the Kelvin potential. This is probably the fastest such code in the world, and in the next notebook we'll test it out in the solver.
 """
@@ -379,6 +379,14 @@ end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
+[compat]
+ForwardDiff = "~0.10.39"
+NeumannKelvin = "~0.11.0"
+Plots = "~1.41.4"
+PlutoUI = "~0.7.79"
+QuadGK = "~2.11.2"
+SpecialFunctions = "~2.6.1"
+
 [deps]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
@@ -388,23 +396,15 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-
-[compat]
-ForwardDiff = "~0.10.39"
-NeumannKelvin = "~0.9.0"
-Plots = "~1.41.4"
-PlutoUI = "~0.7.79"
-QuadGK = "~2.11.2"
-SpecialFunctions = "~2.6.1"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "9c2facd7512a49d4e7b6c53edecfffaa2f0f78cb"
+project_hash = "bf80352e6dc87f0fb388f56ea2fb57588b4fc35c"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -767,7 +767,7 @@ uuid = "c87230d0-a227-11e9-1b43-d7ebe4e7570a"
 version = "0.4.5"
 
 [[deps.FFMPEG_jll]]
-deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
+deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libva_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
 git-tree-sha1 = "01ba9d15e9eae375dc1eb9589df76b3572acd3f2"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "8.0.1+0"
@@ -1272,16 +1272,17 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["AcceleratedKernels", "DataInterpolations", "FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "HCubature", "ImplicitBVH", "Krylov", "LinearAlgebra", "LinearOperators", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "TupleTools", "TypedTables"]
-git-tree-sha1 = "72f873533e5575a637422eec5a255d60d2786e0e"
+git-tree-sha1 = "1610782a09ee46de50a70ea83efdf157592adc86"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.9.0"
+version = "0.11.0"
 
     [deps.NeumannKelvin.extensions]
     NeumannKelvinGeometryBasicsExt = "GeometryBasics"
     NeumannKelvinMakieExt = "Makie"
-    NeumannKelvinNURBSExt = "NURBS"
+    NeumannKelvinNURBSExt = ["NURBS", "FileIO"]
 
     [deps.NeumannKelvin.weakdeps]
+    FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
     GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
     Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
     NURBS = "dde13934-061e-461b-aa91-2c0fad390a0d"
@@ -1847,6 +1848,12 @@ git-tree-sha1 = "7ed9347888fac59a618302ee38216dd0379c480d"
 uuid = "ea2f1a96-1ddc-540d-b46f-429655e07cfa"
 version = "0.9.12+0"
 
+[[deps.Xorg_libpciaccess_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
+git-tree-sha1 = "58972370b81423fc546c56a60ed1a009450177c3"
+uuid = "a65dc6b1-eb27-53a1-bb3e-dea574b5389e"
+version = "0.19.0+0"
+
 [[deps.Xorg_libxcb_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libXau_jll", "Xorg_libXdmcp_jll"]
 git-tree-sha1 = "bfcaf7ec088eaba362093393fe11aa141fa15422"
@@ -1959,6 +1966,12 @@ git-tree-sha1 = "9bf7903af251d2050b467f76bdbe57ce541f7f4f"
 uuid = "1183f4f0-6f2a-5f1a-908b-139f9cdfea6f"
 version = "0.2.2+0"
 
+[[deps.libdrm_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libpciaccess_jll"]
+git-tree-sha1 = "28e57478e8a160d346a19c28b3fffb9273bcc9c2"
+uuid = "8e53e030-5e6c-5a89-a30b-be5b7263a166"
+version = "2.4.134+0"
+
 [[deps.libevdev_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "56d643b57b188d30cccc25e331d416d3d358e557"
@@ -1982,6 +1995,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
 git-tree-sha1 = "6ab498eaf50e0495f89e7a5b582816e2efb95f64"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
 version = "1.6.54+0"
+
+[[deps.libva_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll", "Xorg_libXext_jll", "Xorg_libXfixes_jll", "libdrm_jll"]
+git-tree-sha1 = "21cbc8fc2ac0bb182ed461e556d9c062ae6a3164"
+uuid = "9a156e7d-b971-5f62-b2c9-67348b8fb97c"
+version = "2.24.1+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll"]

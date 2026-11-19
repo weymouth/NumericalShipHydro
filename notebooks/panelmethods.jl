@@ -217,7 +217,7 @@ end
 md"""
 Looks good!
  - The flow seems to be wrapping around the circle, so the boundary condition is being enforced!
- - The arrow look a little smaller near the stagnation points and a little longer around the poles. But it is hard to tell for sure using a *qualitative* plot like this one...
+ - The arrows look a little smaller near the stagnation points and a little longer around the poles. But it is hard to tell for sure using a *qualitative* plot like this one...
 
 ## Validation and Convergence
 
@@ -275,7 +275,7 @@ We can further quantify the panel method's error by computing a relevant **integ
 
 $m_{ij} = -\rho\oint_S \tilde\Phi_i n_j \text{d}a$
 
-where $\rho$ is the fluid desity and $\tilde\Phi_i$ is the scaled potential resulting from unit velocity in direction $i$.
+where $\rho$ is the fluid density and $\tilde\Phi_i$ is the scaled potential resulting from unit velocity in direction $i$.
 
 The analytic solution for a sphere is $\frac 12 ρV = \frac 23 \rho \pi R^3$ on the diagonal and zero for the off diagonals. How does our numerical method perform?
 """
@@ -305,7 +305,7 @@ Since we've scaled by the solution, the result _should_ be the identity matrix. 
 #### Activity:
  - Write a function `sphere_ma_error(h)` which uses `LinearAlgebra: norm,I` to compute the `addedmass` error.
  - Use the @timed macro to evaluate your function for a few values of h.
- - Make a plot of $h/R$ vs the error and the time. What valueof $h$ is pragmatic, and how might you generalize this to other geometries?
+ - Make a plot of $h/R$ vs the error and the time. What value of $h$ is pragmatic, and how might you generalize this to other geometries?
  - Is the code validated?
 """
 
@@ -316,7 +316,7 @@ md"""
 
 This notebook develops a 3D potential flow panel method and tests its predictions. The procedure had three parts:
  - We used the parametric equation for a sphere to generate a set of panels.
- - We used the Neumann boundary condition to develop a linear system equations and solve for the strength of each panel.
+ - We used the Neumann boundary condition to develop a linear system of equations and solve for the strength of each panel.
  - We used the solution to measure the velocity on the panels and the added mass matrix.
 
 We were careful to visually and quantitatively check our intermediate results **at every step along the way**
@@ -335,6 +335,13 @@ end;
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
+[compat]
+ForwardDiff = "~0.10.39"
+NeumannKelvin = "~0.11.0"
+Plots = "~1.41.4"
+StaticArrays = "~1.9.16"
+TypedTables = "~1.4.6"
+
 [deps]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -342,22 +349,15 @@ NeumannKelvin = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
-
-[compat]
-ForwardDiff = "~0.10.39"
-NeumannKelvin = "~0.9.0"
-Plots = "~1.41.4"
-StaticArrays = "~1.9.16"
-TypedTables = "~1.4.6"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "0cad87de3e182e8c8c943d8ea8f83519567d95c3"
+project_hash = "0f6a434280d8a371847e7a900ad62e60bc46cbae"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -714,7 +714,7 @@ uuid = "c87230d0-a227-11e9-1b43-d7ebe4e7570a"
 version = "0.4.5"
 
 [[deps.FFMPEG_jll]]
-deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
+deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libva_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
 git-tree-sha1 = "01ba9d15e9eae375dc1eb9589df76b3572acd3f2"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "8.0.1+0"
@@ -1196,16 +1196,17 @@ version = "1.2.0"
 
 [[deps.NeumannKelvin]]
 deps = ["AcceleratedKernels", "DataInterpolations", "FastChebInterp", "FastGaussQuadrature", "ForwardDiff", "HCubature", "ImplicitBVH", "Krylov", "LinearAlgebra", "LinearOperators", "QuadGK", "Reexport", "Roots", "SpecialFunctions", "StaticArrays", "TupleTools", "TypedTables"]
-git-tree-sha1 = "72f873533e5575a637422eec5a255d60d2786e0e"
+git-tree-sha1 = "1610782a09ee46de50a70ea83efdf157592adc86"
 uuid = "7f078b06-e5c4-4cf8-bb56-b92882a0ad03"
-version = "0.9.0"
+version = "0.11.0"
 
     [deps.NeumannKelvin.extensions]
     NeumannKelvinGeometryBasicsExt = "GeometryBasics"
     NeumannKelvinMakieExt = "Makie"
-    NeumannKelvinNURBSExt = "NURBS"
+    NeumannKelvinNURBSExt = ["NURBS", "FileIO"]
 
     [deps.NeumannKelvin.weakdeps]
+    FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
     GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
     Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
     NURBS = "dde13934-061e-461b-aa91-2c0fad390a0d"
@@ -1760,6 +1761,12 @@ git-tree-sha1 = "7ed9347888fac59a618302ee38216dd0379c480d"
 uuid = "ea2f1a96-1ddc-540d-b46f-429655e07cfa"
 version = "0.9.12+0"
 
+[[deps.Xorg_libpciaccess_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
+git-tree-sha1 = "58972370b81423fc546c56a60ed1a009450177c3"
+uuid = "a65dc6b1-eb27-53a1-bb3e-dea574b5389e"
+version = "0.19.0+0"
+
 [[deps.Xorg_libxcb_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libXau_jll", "Xorg_libXdmcp_jll"]
 git-tree-sha1 = "bfcaf7ec088eaba362093393fe11aa141fa15422"
@@ -1872,6 +1879,12 @@ git-tree-sha1 = "9bf7903af251d2050b467f76bdbe57ce541f7f4f"
 uuid = "1183f4f0-6f2a-5f1a-908b-139f9cdfea6f"
 version = "0.2.2+0"
 
+[[deps.libdrm_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libpciaccess_jll"]
+git-tree-sha1 = "28e57478e8a160d346a19c28b3fffb9273bcc9c2"
+uuid = "8e53e030-5e6c-5a89-a30b-be5b7263a166"
+version = "2.4.134+0"
+
 [[deps.libevdev_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "56d643b57b188d30cccc25e331d416d3d358e557"
@@ -1895,6 +1908,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
 git-tree-sha1 = "6ab498eaf50e0495f89e7a5b582816e2efb95f64"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
 version = "1.6.54+0"
+
+[[deps.libva_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll", "Xorg_libXext_jll", "Xorg_libXfixes_jll", "libdrm_jll"]
+git-tree-sha1 = "21cbc8fc2ac0bb182ed461e556d9c062ae6a3164"
+uuid = "9a156e7d-b971-5f62-b2c9-67348b8fb97c"
+version = "2.24.1+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll"]
